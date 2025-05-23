@@ -1480,21 +1480,476 @@ class FrontendViewConfig(BaseModel):
 # Backend Configuration
 BACKEND_CONFIG = {
     "domains": [
-       
+        {
+            "domainName": "manufacturing_process",
+            "displayName": "Manufacturing Process",
+            "tables": [
+                {
+                    "tableName": "manufacturing_steps",
+                    "displayName": "Manufacturing Steps",
+                    "businessKeys": ["step_code", "step_name"],
+                    "columns": [
+                        {"name": "step_code", "type": "text", "required": True},
+                        {"name": "step_name", "type": "text", "required": True},
+                        {"name": "description", "type": "textarea", "required": False},
+                        {"name": "sequence_number", "type": "number", "required": True},
+                        {"name": "duration_hours", "type": "number", "required": False},
+                        {"name": "temperature_range", "type": "text", "required": False},
+                        {"name": "critical_parameters", "type": "textarea", "required": False}
+                    ],
+                    "relationships": None
+                },
+                {
+                    "tableName": "manufacturing_substeps",
+                    "displayName": "Manufacturing Sub-steps",
+                    "businessKeys": ["substep_code", "substep_name"],
+                    "columns": [
+                        {"name": "substep_code", "type": "text", "required": True},
+                        {"name": "substep_name", "type": "text", "required": True},
+                        {"name": "description", "type": "textarea", "required": False},
+                        {"name": "sequence_number", "type": "number", "required": True},
+                        {"name": "equipment_required", "type": "text", "required": False},
+                        {"name": "safety_notes", "type": "textarea", "required": False}
+                    ],
+                    "relationships": {
+                        "type": "many",
+                        "parentTable": "manufacturing_steps",
+                        "parentKeys": ["step_code", "step_name"],
+                        "childKeys": ["parent_step_code", "parent_step_name"]
+                    }
+                },
+                {
+                    "tableName": "step_categories",
+                    "displayName": "Step Categories",
+                    "businessKeys": ["category_code"],
+                    "columns": [
+                        {"name": "category_code", "type": "text", "required": True},
+                        {"name": "category_name", "type": "text", "required": True},
+                        {"name": "category_type", "type": "dropdown", "required": True, 
+                         "options": ["Chemical", "Physical", "Biological", "Quality Control"]},
+                        {"name": "regulatory_requirements", "type": "textarea", "required": False},
+                        {"name": "validation_criteria", "type": "textarea", "required": False}
+                    ],
+                    "relationships": {
+                        "type": "one",
+                        "parentTable": "manufacturing_steps",
+                        "parentKeys": ["step_code"],
+                        "childKeys": ["step_code"]
+                    }
+                }
+            ]
+        },
+        {
+            "domainName": "batch_lot_info",
+            "displayName": "Batch Lot Information",
+            "tables": [
+                {
+                    "tableName": "batch_lots",
+                    "displayName": "Batch Lots",
+                    "businessKeys": ["batch_number", "lot_number"],
+                    "columns": [
+                        {"name": "batch_number", "type": "text", "required": True},
+                        {"name": "lot_number", "type": "text", "required": True},
+                        {"name": "product_code", "type": "text", "required": True},
+                        {"name": "product_name", "type": "text", "required": True},
+                        {"name": "manufacture_date", "type": "date", "required": True},
+                        {"name": "expiry_date", "type": "date", "required": True},
+                        {"name": "quantity", "type": "number", "required": True},
+                        {"name": "unit_of_measure", "type": "dropdown", "required": True,
+                         "options": ["kg", "L", "units", "vials"]},
+                        {"name": "status", "type": "dropdown", "required": True,
+                         "options": ["In Process", "Quarantine", "Released", "Rejected", "Expired"]}
+                    ],
+                    "relationships": None
+                },
+                {
+                    "tableName": "batch_raw_materials",
+                    "displayName": "Raw Materials Used",
+                    "businessKeys": ["material_code"],
+                    "columns": [
+                        {"name": "material_code", "type": "text", "required": True},
+                        {"name": "material_name", "type": "text", "required": True},
+                        {"name": "supplier_batch", "type": "text", "required": True},
+                        {"name": "quantity_used", "type": "number", "required": True},
+                        {"name": "unit", "type": "dropdown", "required": True,
+                         "options": ["kg", "g", "L", "mL"]},
+                        {"name": "certificate_number", "type": "text", "required": False},
+                        {"name": "expiry_date", "type": "date", "required": False}
+                    ],
+                    "relationships": {
+                        "type": "many",
+                        "parentTable": "batch_lots",
+                        "parentKeys": ["batch_number", "lot_number"],
+                        "childKeys": ["batch_number", "lot_number"]
+                    }
+                },
+                {
+                    "tableName": "batch_quality_tests",
+                    "displayName": "Quality Test Results",
+                    "businessKeys": ["test_code"],
+                    "columns": [
+                        {"name": "test_code", "type": "text", "required": True},
+                        {"name": "test_name", "type": "text", "required": True},
+                        {"name": "test_date", "type": "date", "required": True},
+                        {"name": "result_value", "type": "text", "required": True},
+                        {"name": "specification", "type": "text", "required": True},
+                        {"name": "test_status", "type": "dropdown", "required": True,
+                         "options": ["Pass", "Fail", "Pending", "Retest"]},
+                        {"name": "performed_by", "type": "text", "required": True},
+                        {"name": "approved_by", "type": "text", "required": False}
+                    ],
+                    "relationships": {
+                        "type": "many",
+                        "parentTable": "batch_lots",
+                        "parentKeys": ["batch_number", "lot_number"],
+                        "childKeys": ["batch_number", "lot_number"]
+                    }
+                }
+            ]
+        }
     ]
 }
 
 # Frontend Configuration
 FRONTEND_CONFIG = {
     "views": [
-        
+        {
+            "viewName": "manufacturing_process_view",
+            "domainName": "manufacturing_process",
+            "filters": [
+                {
+                    "name": "plant",
+                    "displayName": "Manufacturing Plant",
+                    "type": "dropdown",
+                    "required": True,
+                    "options": ["Plant A - New Jersey", "Plant B - California", "Plant C - Texas"],
+                    "placeholder": "Select Plant"
+                },
+                {
+                    "name": "product_line",
+                    "displayName": "Product Line",
+                    "type": "dropdown",
+                    "required": True,
+                    "options": ["API Line 1", "API Line 2", "Formulation Line A", "Formulation Line B"],
+                    "placeholder": "Select Product Line"
+                },
+                {
+                    "name": "process_version",
+                    "displayName": "Process Version",
+                    "type": "dropdown",
+                    "required": True,
+                    "options": ["Version 1.0", "Version 2.0", "Version 2.1", "Version 3.0"],
+                    "placeholder": "Select Version"
+                }
+            ],
+            "displayColumns": {
+                "manufacturing_steps": [
+                    {"columnName": "step_code", "displayName": "Step Code", "width": "120px"},
+                    {"columnName": "step_name", "displayName": "Step Name", "width": "200px"},
+                    {"columnName": "sequence_number", "displayName": "Sequence", "width": "100px"},
+                    {"columnName": "duration_hours", "displayName": "Duration (hrs)", "width": "120px"},
+                    {"columnName": "temperature_range", "displayName": "Temperature", "width": "150px"}
+                ],
+                "manufacturing_substeps": [
+                    {"columnName": "substep_code", "displayName": "Sub-step Code", "width": "120px"},
+                    {"columnName": "substep_name", "displayName": "Sub-step Name", "width": "200px"},
+                    {"columnName": "sequence_number", "displayName": "Sequence", "width": "100px"},
+                    {"columnName": "equipment_required", "displayName": "Equipment", "width": "200px"}
+                ],
+                "step_categories": [
+                    {"columnName": "category_code", "displayName": "Category Code", "width": "120px"},
+                    {"columnName": "category_name", "displayName": "Category Name", "width": "200px"},
+                    {"columnName": "category_type", "displayName": "Type", "width": "150px"}
+                ]
+            }
+        },
+        {
+            "viewName": "batch_lot_view",
+            "domainName": "batch_lot_info",
+            "filters": [
+                {
+                    "name": "year",
+                    "displayName": "Year",
+                    "type": "dropdown",
+                    "required": True,
+                    "options": ["2024", "2023", "2022", "2021"],
+                    "placeholder": "Select Year"
+                },
+                {
+                    "name": "product",
+                    "displayName": "Product",
+                    "type": "dropdown",
+                    "required": True,
+                    "options": ["Product Alpha", "Product Beta", "Product Gamma", "Product Delta"],
+                    "placeholder": "Select Product"
+                },
+                {
+                    "name": "site",
+                    "displayName": "Manufacturing Site",
+                    "type": "dropdown",
+                    "required": True,
+                    "options": ["Site 1 - US", "Site 2 - EU", "Site 3 - Asia"],
+                    "placeholder": "Select Site"
+                },
+                {
+                    "name": "batch_range",
+                    "displayName": "Batch Number Range",
+                    "type": "text",
+                    "required": False,
+                    "placeholder": "e.g., BT-2024-001 to BT-2024-100"
+                }
+            ],
+            "displayColumns": {
+                "batch_lots": [
+                    {"columnName": "batch_number", "displayName": "Batch #", "width": "120px"},
+                    {"columnName": "lot_number", "displayName": "Lot #", "width": "120px"},
+                    {"columnName": "product_code", "displayName": "Product Code", "width": "120px"},
+                    {"columnName": "product_name", "displayName": "Product Name", "width": "200px"},
+                    {"columnName": "manufacture_date", "displayName": "Mfg Date", "width": "120px"},
+                    {"columnName": "status", "displayName": "Status", "width": "120px"}
+                ],
+                "batch_raw_materials": [
+                    {"columnName": "material_code", "displayName": "Material Code", "width": "120px"},
+                    {"columnName": "material_name", "displayName": "Material Name", "width": "200px"},
+                    {"columnName": "quantity_used", "displayName": "Quantity", "width": "100px"},
+                    {"columnName": "unit", "displayName": "Unit", "width": "80px"}
+                ],
+                "batch_quality_tests": [
+                    {"columnName": "test_code", "displayName": "Test Code", "width": "120px"},
+                    {"columnName": "test_name", "displayName": "Test Name", "width": "200px"},
+                    {"columnName": "result_value", "displayName": "Result", "width": "120px"},
+                    {"columnName": "test_status", "displayName": "Status", "width": "100px"}
+                ]
+            }
+        }
     ]
 }
 
 # Initialize with test data
 DATA_STORE = {
-    
-    
+    # Manufacturing Process Test Data
+    "manufacturing_process.manufacturing_steps": [
+        {
+            "step_code": "SYNTH-001",
+            "step_name": "Initial Synthesis",
+            "description": "Primary synthesis of active pharmaceutical ingredient",
+            "sequence_number": 1,
+            "duration_hours": 8,
+            "temperature_range": "20-25°C",
+            "critical_parameters": "pH: 6.5-7.5, Pressure: 1-2 bar",
+            "created_at": datetime.now().isoformat(),
+            "updated_at": datetime.now().isoformat()
+        },
+        {
+            "step_code": "CRYST-002",
+            "step_name": "Crystallization",
+            "description": "Crystallization of synthesized compound",
+            "sequence_number": 2,
+            "duration_hours": 12,
+            "temperature_range": "0-5°C",
+            "critical_parameters": "Cooling rate: 2°C/hour, Stirring: 50-100 rpm",
+            "created_at": datetime.now().isoformat(),
+            "updated_at": datetime.now().isoformat()
+        },
+        {
+            "step_code": "FILT-003",
+            "step_name": "Filtration and Drying",
+            "description": "Filter crystals and dry under vacuum",
+            "sequence_number": 3,
+            "duration_hours": 6,
+            "temperature_range": "40-50°C",
+            "critical_parameters": "Vacuum: 50-100 mbar, Moisture content: <0.5%",
+            "created_at": datetime.now().isoformat(),
+            "updated_at": datetime.now().isoformat()
+        }
+    ],
+    "manufacturing_process.manufacturing_substeps": [
+        {
+            "substep_code": "SYNTH-001-A",
+            "substep_name": "Reagent Preparation",
+            "description": "Prepare and charge reagents",
+            "sequence_number": 1,
+            "equipment_required": "Reactor R-101, Scale SC-001",
+            "safety_notes": "Use appropriate PPE, ensure proper ventilation",
+            "parent_step_code": "SYNTH-001",
+            "parent_step_name": "Initial Synthesis",
+            "created_at": datetime.now().isoformat(),
+            "updated_at": datetime.now().isoformat()
+        },
+        {
+            "substep_code": "SYNTH-001-B",
+            "substep_name": "Reaction Initiation",
+            "description": "Start reaction under controlled conditions",
+            "sequence_number": 2,
+            "equipment_required": "Reactor R-101, Temperature controller TC-001",
+            "safety_notes": "Monitor temperature closely, emergency cooling ready",
+            "parent_step_code": "SYNTH-001",
+            "parent_step_name": "Initial Synthesis",
+            "created_at": datetime.now().isoformat(),
+            "updated_at": datetime.now().isoformat()
+        },
+        {
+            "substep_code": "CRYST-002-A",
+            "substep_name": "Cooling Program",
+            "description": "Controlled cooling for crystal formation",
+            "sequence_number": 1,
+            "equipment_required": "Crystallizer CR-001, Chiller CH-001",
+            "safety_notes": "Avoid rapid temperature changes",
+            "parent_step_code": "CRYST-002",
+            "parent_step_name": "Crystallization",
+            "created_at": datetime.now().isoformat(),
+            "updated_at": datetime.now().isoformat()
+        }
+    ],
+    "manufacturing_process.step_categories": [
+        {
+            "category_code": "CAT-SYNTH-001",
+            "category_name": "Chemical Synthesis",
+            "category_type": "Chemical",
+            "regulatory_requirements": "GMP compliance required, Process validation needed",
+            "validation_criteria": "3 consecutive successful batches, Yield >85%",
+            "step_code": "SYNTH-001",
+            "created_at": datetime.now().isoformat(),
+            "updated_at": datetime.now().isoformat()
+        },
+        {
+            "category_code": "CAT-CRYST-002",
+            "category_name": "Physical Processing",
+            "category_type": "Physical",
+            "regulatory_requirements": "Crystal form verification, Particle size control",
+            "validation_criteria": "Crystal polymorph confirmed by XRD, PSD within limits",
+            "step_code": "CRYST-002",
+            "created_at": datetime.now().isoformat(),
+            "updated_at": datetime.now().isoformat()
+        }
+    ],
+    # Batch Lot Test Data
+    "batch_lot_info.batch_lots": [
+        {
+            "batch_number": "BT-2024-001",
+            "lot_number": "L-20240115-A",
+            "product_code": "API-001",
+            "product_name": "Active Ingredient Alpha",
+            "manufacture_date": "2024-01-15",
+            "expiry_date": "2026-01-15",
+            "quantity": 250,
+            "unit_of_measure": "kg",
+            "status": "Released",
+            "created_at": datetime.now().isoformat(),
+            "updated_at": datetime.now().isoformat()
+        },
+        {
+            "batch_number": "BT-2024-002",
+            "lot_number": "L-20240220-A",
+            "product_code": "API-001",
+            "product_name": "Active Ingredient Alpha",
+            "manufacture_date": "2024-02-20",
+            "expiry_date": "2026-02-20",
+            "quantity": 300,
+            "unit_of_measure": "kg",
+            "status": "In Process",
+            "created_at": datetime.now().isoformat(),
+            "updated_at": datetime.now().isoformat()
+        },
+        {
+            "batch_number": "BT-2024-003",
+            "lot_number": "L-20240310-B",
+            "product_code": "API-002",
+            "product_name": "Active Ingredient Beta",
+            "manufacture_date": "2024-03-10",
+            "expiry_date": "2026-03-10",
+            "quantity": 150,
+            "unit_of_measure": "kg",
+            "status": "Quarantine",
+            "created_at": datetime.now().isoformat(),
+            "updated_at": datetime.now().isoformat()
+        }
+    ],
+    "batch_lot_info.batch_raw_materials": [
+        {
+            "material_code": "RM-001",
+            "material_name": "Starting Material A",
+            "supplier_batch": "SUP-2024-0012",
+            "quantity_used": 100,
+            "unit": "kg",
+            "certificate_number": "COA-2024-0012",
+            "expiry_date": "2025-06-30",
+            "batch_number": "BT-2024-001",
+            "lot_number": "L-20240115-A",
+            "created_at": datetime.now().isoformat(),
+            "updated_at": datetime.now().isoformat()
+        },
+        {
+            "material_code": "RM-002",
+            "material_name": "Catalyst X",
+            "supplier_batch": "SUP-2024-0045",
+            "quantity_used": 5,
+            "unit": "kg",
+            "certificate_number": "COA-2024-0045",
+            "expiry_date": "2025-12-31",
+            "batch_number": "BT-2024-001",
+            "lot_number": "L-20240115-A",
+            "created_at": datetime.now().isoformat(),
+            "updated_at": datetime.now().isoformat()
+        },
+        {
+            "material_code": "RM-003",
+            "material_name": "Solvent Y",
+            "supplier_batch": "SUP-2024-0078",
+            "quantity_used": 500,
+            "unit": "L",
+            "certificate_number": "COA-2024-0078",
+            "expiry_date": "2025-09-30",
+            "batch_number": "BT-2024-001",
+            "lot_number": "L-20240115-A",
+            "created_at": datetime.now().isoformat(),
+            "updated_at": datetime.now().isoformat()
+        }
+    ],
+    "batch_lot_info.batch_quality_tests": [
+        {
+            "test_code": "QT-001",
+            "test_name": "Purity by HPLC",
+            "test_date": "2024-01-20",
+            "result_value": "99.2%",
+            "specification": "≥99.0%",
+            "test_status": "Pass",
+            "performed_by": "John Smith",
+            "approved_by": "Sarah Johnson",
+            "batch_number": "BT-2024-001",
+            "lot_number": "L-20240115-A",
+            "created_at": datetime.now().isoformat(),
+            "updated_at": datetime.now().isoformat()
+        },
+        {
+            "test_code": "QT-002",
+            "test_name": "Water Content",
+            "test_date": "2024-01-20",
+            "result_value": "0.3%",
+            "specification": "≤0.5%",
+            "test_status": "Pass",
+            "performed_by": "John Smith",
+            "approved_by": "Sarah Johnson",
+            "batch_number": "BT-2024-001",
+            "lot_number": "L-20240115-A",
+            "created_at": datetime.now().isoformat(),
+            "updated_at": datetime.now().isoformat()
+        },
+        {
+            "test_code": "QT-003",
+            "test_name": "Heavy Metals",
+            "test_date": "2024-01-21",
+            "result_value": "<10 ppm",
+            "specification": "≤20 ppm",
+            "test_status": "Pass",
+            "performed_by": "Mike Davis",
+            "approved_by": "Sarah Johnson",
+            "batch_number": "BT-2024-001",
+            "lot_number": "L-20240115-A",
+            "created_at": datetime.now().isoformat(),
+            "updated_at": datetime.now().isoformat()
+        }
+    ]
 }
 
 # API Endpoints
