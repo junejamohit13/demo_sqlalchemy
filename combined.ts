@@ -1,7 +1,119 @@
+# Model introspection utilities
+class ModelIntrospector:
+    """Utilities for extracting metadata from SQLAlchemy models"""
+    
+    @staticmethod
+    def get_business_keys(model_class) -> List[str]:
+        """Get business keys defined in the model"""
+        if hasattr(model_class, '__business_keys__'):
+            return model_class.__business_keys__
+        return []
+    
+    @staticmethod
+    def get_primary_key_column(model_class) -> str:
+        """Get the primary key column name for a model"""
+        mapper = class_mapper(model_class)
+        pk_columns = mapper.primary_key
+        if pk_columns:
+            return pk_columns[0].name
+        return "id"  # Default fallback
+    
+    @staticmethod
+    def get_foreign_key_info(model_class) -> List[Dict[str, Any]]:
+        """Get foreign key information from a model"""
+        foreign_keys = []
+        mapper = class_mapper(model_class)
+        
+        for column in mapper.columns:
+            if column.foreign_keys:
+                for fk in column.foreign_keys:
+                    foreign_keys.append({
+                        "column": column.name,
+                        "foreign_table": fk.column.table.name,
+                        "foreign_column": fk.column.name
+                    })
+        
+        return foreign_keys
+    
+    @staticmethod
+    def get_date_columns(model_class) -> List[str]:
+        """Get list of date/datetime columns from a model"""
+        date_columns = []
+        mapper = class_mapper(model_class)
+        
+        for column in mapper.columns:
+            if column.type.__class__.__name__ in ['DateTime', 'Date', 'Time']:
+                date_columns.append(column.name)
+        
+        return date_columns
+    
+    @staticmethod
+    def get_required_columns(model_class) -> List[str]:
+        """Get list of required (non-nullable) columns"""
+        required_columns = []
+        mapper = class_mapper(model_class)
+        
+        for column in mapper.columns:
+            if not column.nullable and not column.primary_key and not column.default:
+                required_columns.append(column.name)
+        
+        return required_columns
+    
+    @staticmethod
+    def is_association_table(model_class) -> bool:
+        """Detect if a model represents an association table"""
+        # Check if explicitly marked
+        if hasattr(model_class, '__is_association_table__'):
+            return model_class.__is_association_table__
+        
+        # Auto-detect: tables with 2+ FKs and few other columns
+        fk_info = ModelIntrospector.get_foreign_key_info(model_class)
+        if len(fk_info) >= 2:
+            mapper = class_mapper(model_class)
+            total_columns = len(list(mapper.columns))
+            fk_columns = len(fk_info)
+            system_columns = ['id', 'created_at', 'updated_at']
+            
+            # Count non-FK, non-system columns
+            non_fk_columns = 0
+            for col in mapper.columns:
+                col_name = col.name
+                is_fk = any(fk['column'] == col_name for fk in fk_info)
+                is_system = col_name in system_columns
+                if not is_fk and not is_system:
+                    non_fk_columns += 1
+            
+            # If mostly FKs with few additional columns, it's likely an association table
+            return non_fk_columns <= 3
+        
+        return False
+    
+    @staticmethod
+    def get_association_table_relationships(model_class) -> Optional[Dict[str, Any]]:
+        """Get relationship info for association tables"""
+        fk_info = ModelIntrospector.get_foreign_key_info(model_class)
+        
+        if len(fk_info) >= 2:  # Association tables typically have 2+ foreign keys
+            parents = []
+            for fk in fk_info:
+                parents.append({
+                    "parentTable": fk["foreign_table"],
+                    "parentKey": fk["foreign_column"],
+                    "childKey": fk["column"]
+                })
+            
+            return {
+                "type": "association",
+                "parents": parents
+            }
+        
+        return None
+
+# Refactored writeback_domain function
 def writeback_domain(domain_name: str, data: Dict[str, List[Dict]], db: Session):
     """
     Writeback endpoint for saving all domain data at once
-    Simplified approach using business keys without tempId
+    Using SQLAlchemy model introspection for metadata
     """
     
     # Get domain config
@@ -20,6 +132,9 @@ def writeback_domain(domain_name: str, data: Dict[str, List[Dict]], db: Session)
     # Build table config lookup
     table_configs = {table["tableName"]: table for table in domain_config["tables"]}
     
+    # Create model introspector
+    introspector = ModelIntrospector()
+    
     # Track business key to PK mappings for foreign key resolution
     # Format: {table_name: {tuple(business_key_values): pk_value}}
     bk_to_pk_mappings = {}
@@ -36,105 +151,62 @@ def writeback_domain(domain_name: str, data: Dict[str, List[Dict]], db: Session)
         """Get tuple of business key values for a record"""
         return tuple(record.get(bk) for bk in business_keys)
     
-    def get_date_columns(table_config):
-        """Get list of date/datetime columns from table config"""
-        date_columns = []
-        for col in table_config.get("columns", []):
-            if col["type"] == "date" or col["type"] == "datetime":
-                date_columns.append(col["name"])
-        return date_columns
-    
-    def get_foreign_key_columns(table_config):
-        """Get list of foreign key columns (columns ending with _id)"""
-        fk_columns = []
-        for col in table_config.get("columns", []):
-            if col["name"].endswith("_id"):
-                fk_columns.append(col["name"])
-        return fk_columns
-    
-    def resolve_foreign_keys(record_dict, table_config):
+    def resolve_foreign_keys(record_dict, model_class, table_config):
         """Resolve foreign key references using parent mappings"""
-        relationships = table_config.get("relationships")
-        if not relationships:
+        # Get foreign key info from model
+        fk_info = introspector.get_foreign_key_info(model_class)
+        
+        if not fk_info:
             return record_dict
         
-        # Handle both old format (single relationship) and new format (multiple relationships)
-        if isinstance(relationships, dict):
-            # Old format - convert to new format
-            if relationships.get("type") == "association" and "parents" in relationships:
-                # Already in new association format
-                parent_configs = relationships["parents"]
-            else:
-                # Convert old format to new format
-                parent_configs = [{
-                    "parentTable": relationships["parentTable"],
-                    "parentKeys": relationships["parentKeys"],
-                    "childKeys": relationships["childKeys"]
-                }]
-        elif isinstance(relationships, list):
-            # New format - already a list
-            parent_configs = relationships
-        else:
-            return record_dict
-        
-        # Process each parent relationship
-        for parent_config in parent_configs:
-            parent_table = parent_config["parentTable"]
-            parent_table_config = table_configs.get(parent_table)
-            
-            if not parent_table_config:
-                continue
-                
-            parent_pk_column = parent_table_config.get("primaryKeyColumn", "id")
-            parent_model = TABLE_MODEL_MAP.get(parent_table)
-            
-            if not parent_model:
-                continue
-            
-            # Handle both single key and multiple keys
-            parent_keys = parent_config.get("parentKeys", [parent_config.get("parentKey")])
-            child_keys = parent_config.get("childKeys", [parent_config.get("childKey")])
-            
-            # Ensure they're lists
-            if not isinstance(parent_keys, list):
-                parent_keys = [parent_keys]
-            if not isinstance(child_keys, list):
-                child_keys = [child_keys]
-            
-            # Build filter conditions for parent lookup
-            parent_filters = []
-            all_keys_present = True
-            
-            for i, child_key in enumerate(child_keys):
-                if i < len(parent_keys):
-                    parent_key = parent_keys[i]
-                    if child_key in record_dict and record_dict[child_key] is not None:
-                        parent_filters.append(
-                            getattr(parent_model, parent_key) == record_dict[child_key]
-                        )
-                    else:
-                        all_keys_present = False
-                        break
-            
-            if parent_filters and all_keys_present:
-                parent_record = db.query(parent_model).filter(and_(*parent_filters)).first()
-                if parent_record:
-                    # Set the foreign key ID field
-                    # Try to infer FK field name
-                    if len(child_keys) == 1 and child_keys[0].endswith('_id'):
-                        # FK field already specified in child keys
-                        fk_field_name = child_keys[0]
-                    else:
-                        # Infer FK field name from parent table (e.g., manufacturing_steps -> parent_step_id)
-                        # Check if a specific FK field exists
-                        if parent_table.endswith('s'):
-                            fk_field_name = f"{parent_table[:-1]}_id"
-                        else:
-                            fk_field_name = f"{parent_table}_id"
+        # For association tables, use the introspected relationships
+        if introspector.is_association_table(model_class):
+            relationships = introspector.get_association_table_relationships(model_class)
+            if relationships:
+                for parent_config in relationships["parents"]:
+                    parent_table = parent_config["parentTable"]
+                    parent_model = TABLE_MODEL_MAP.get(parent_table)
                     
-                    # Only set if the field exists in the model
-                    if hasattr(TABLE_MODEL_MAP[table_config["tableName"]], fk_field_name):
-                        record_dict[fk_field_name] = getattr(parent_record, parent_pk_column)
+                    if not parent_model:
+                        continue
+                    
+                    # Get business keys for parent table
+                    parent_business_keys = introspector.get_business_keys(parent_model)
+                    
+                    if parent_business_keys:
+                        # Build business key tuple from record
+                        bk_values = []
+                        all_keys_present = True
+                        
+                        for bk in parent_business_keys:
+                            if bk in record_dict:
+                                bk_values.append(record_dict[bk])
+                            else:
+                                all_keys_present = False
+                                break
+                        
+                        if all_keys_present:
+                            bk_tuple = tuple(bk_values)
+                            
+                            # Look up the PK from our mappings
+                            if parent_table in bk_to_pk_mappings and bk_tuple in bk_to_pk_mappings[parent_table]:
+                                pk_value = bk_to_pk_mappings[parent_table][bk_tuple]
+                                record_dict[parent_config["childKey"]] = pk_value
+                            else:
+                                # Try to find in database
+                                parent_pk_column = introspector.get_primary_key_column(parent_model)
+                                filters = []
+                                for i, bk in enumerate(parent_business_keys):
+                                    filters.append(getattr(parent_model, bk) == bk_values[i])
+                                
+                                parent_record = db.query(parent_model).filter(and_(*filters)).first()
+                                if parent_record:
+                                    pk_value = getattr(parent_record, parent_pk_column)
+                                    record_dict[parent_config["childKey"]] = pk_value
+                                    # Cache it
+                                    if parent_table not in bk_to_pk_mappings:
+                                        bk_to_pk_mappings[parent_table] = {}
+                                    bk_to_pk_mappings[parent_table][bk_tuple] = pk_value
         
         return record_dict
     
@@ -149,8 +221,8 @@ def writeback_domain(domain_name: str, data: Dict[str, List[Dict]], db: Session)
                 continue
                 
             table_config = table_configs[table_name]
-            pk_column = table_config.get("primaryKeyColumn", "id")
-            business_keys = table_config.get("businessKeys", [])
+            pk_column = introspector.get_primary_key_column(model_class)
+            business_keys = introspector.get_business_keys(model_class)
             
             if business_keys:
                 bk_to_pk_mappings[table_name] = {}
@@ -177,10 +249,12 @@ def writeback_domain(domain_name: str, data: Dict[str, List[Dict]], db: Session)
                 results["errors"][table_name] = f"Table config for {table_name} not found"
                 continue
             
-            pk_column = table_config.get("primaryKeyColumn", "id")
-            business_keys = table_config.get("businessKeys", [])
-            date_columns = get_date_columns(table_config)
-            is_association_table = table_config.get("isAssociationTable", False)
+            # Get metadata from model
+            pk_column = introspector.get_primary_key_column(model_class)
+            business_keys = introspector.get_business_keys(model_class)
+            date_columns = introspector.get_date_columns(model_class)
+            fk_columns = [fk["column"] for fk in introspector.get_foreign_key_info(model_class)]
+            is_association_table = introspector.is_association_table(model_class)
             
             # Initialize tracking for this table
             results["created"][table_name] = []
@@ -197,9 +271,9 @@ def writeback_domain(domain_name: str, data: Dict[str, List[Dict]], db: Session)
                     pk_ref = record_dict.pop('_pk', None)
                     
                     # Resolve foreign key references
-                    record_dict = resolve_foreign_keys(record_dict, table_config)
+                    record_dict = resolve_foreign_keys(record_dict, model_class, table_config)
                     
-                    # Handle date conversions based on config
+                    # Handle date conversions based on introspected columns
                     for col_name in date_columns:
                         if col_name in record_dict:
                             value = record_dict[col_name]
@@ -208,21 +282,7 @@ def writeback_domain(domain_name: str, data: Dict[str, List[Dict]], db: Session)
                                     record_dict[col_name] = datetime.fromisoformat(value.replace('Z', '+00:00'))
                                 except:
                                     try:
-                                        # Try without timezone
                                         record_dict[col_name] = datetime.fromisoformat(value.replace('Z', ''))
-                                    except:
-                                        pass
-                    
-                    # Also handle created_at and updated_at if they exist (system fields)
-                    for sys_field in ['created_at', 'updated_at']:
-                        if sys_field in record_dict:
-                            value = record_dict[sys_field]
-                            if value and isinstance(value, str):
-                                try:
-                                    record_dict[sys_field] = datetime.fromisoformat(value.replace('Z', '+00:00'))
-                                except:
-                                    try:
-                                        record_dict[sys_field] = datetime.fromisoformat(value.replace('Z', ''))
                                     except:
                                         pass
                     
@@ -241,19 +301,17 @@ def writeback_domain(domain_name: str, data: Dict[str, List[Dict]], db: Session)
                     
                     # If no pk_ref or not found by PK, check for existing record
                     if not existing_record:
-                        if is_association_table:
+                        if is_association_table and fk_columns:
                             # For association tables, use foreign key columns as composite unique key
-                            fk_columns = get_foreign_key_columns(table_config)
-                            if fk_columns:
-                                fk_filters = []
-                                for fk_col in fk_columns:
-                                    if fk_col in record_dict and record_dict[fk_col] is not None:
-                                        fk_filters.append(getattr(model_class, fk_col) == record_dict[fk_col])
-                                
-                                if len(fk_filters) == len(fk_columns):  # All FKs present
-                                    existing_record = db.query(model_class).filter(and_(*fk_filters)).first()
-                                    if existing_record:
-                                        is_new_record = False
+                            fk_filters = []
+                            for fk_col in fk_columns:
+                                if fk_col in record_dict and record_dict[fk_col] is not None:
+                                    fk_filters.append(getattr(model_class, fk_col) == record_dict[fk_col])
+                            
+                            if len(fk_filters) == len(fk_columns):  # All FKs present
+                                existing_record = db.query(model_class).filter(and_(*fk_filters)).first()
+                                if existing_record:
+                                    is_new_record = False
                         
                         elif business_keys:
                             # Regular table with business keys
@@ -269,12 +327,10 @@ def writeback_domain(domain_name: str, data: Dict[str, List[Dict]], db: Session)
                     
                     if not is_new_record and existing_record:
                         # Update existing record
-                        # For association tables, typically we don't update, but we can if there are additional fields
                         update_allowed = True
                         
                         if is_association_table:
                             # Check if only FK columns are being "updated" (no real change)
-                            fk_columns = get_foreign_key_columns(table_config)
                             non_fk_changes = any(
                                 key not in fk_columns + ['created_at', 'updated_at', pk_column]
                                 for key in record_dict.keys()
