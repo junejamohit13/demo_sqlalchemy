@@ -1,1244 +1,1579 @@
-// DynamicApp.tsx - Fully Dynamic Configuration-Driven 3NF Data Entry System
-import React, { useState, useEffect, useMemo } from 'react';
-import axios, { AxiosResponse } from 'axios';
+import React from "react";
+import { useTheme } from "next-themes";
+import { Toaster as Sonner, type ToasterProps } from "sonner";
 
-const API_BASE_URL = 'http://localhost:8000/api';
+type Props = ToasterProps;
 
-// Type Definitions
-interface Field {
+const Toaster: React.FC<Props> = ({ ...props }) => {
+  const { theme = "system" } = useTheme();
+
+  return (
+    <Sonner
+      theme={theme as ToasterProps["theme"]}
+      className="toaster group"
+      {...props}
+    />
+  );
+};
+
+export { Toaster };
+import React, { useState, useEffect } from 'react';
+import {
+  Button,
+  Tabs,
+  Tag,
+  Input,
+  Select,
+  Table,
+  Modal,
+  Space,
+  Typography,
+  Popover,
+  Divider,
+  Row,
+  Col,
+  DatePicker,
+  InputNumber,
+  Switch,
+  Tooltip,
+  Alert,
+  Form
+} from 'antd';
+import type { ColumnsType } from 'antd/es/table';
+import type { TabsProps } from 'antd';
+import {
+  SearchOutlined,
+  FilterOutlined,
+  PlusOutlined,
+  DeleteOutlined,
+  EditOutlined,
+  CopyOutlined,
+  CloseOutlined,
+  DatabaseOutlined,
+  ExportOutlined
+} from '@ant-design/icons';
+import dayjs from 'dayjs';
+import { toast } from 'sonner';
+import { Building, Users, FolderOpen, CheckSquare } from 'lucide-react';
+
+// Generic Data Types
+export interface BaseEntity {
+  id: string;
+  businessKey: string;
+  createdAt: string;
+  updatedAt: string;
+  [key: string]: any; // Allow additional properties
+}
+
+export interface DataStore {
+  [tableName: string]: BaseEntity[];
+}
+
+// Filter Types
+interface FilterCondition {
+  field: string;
+  operator: 'equals' | 'contains' | 'startsWith' | 'endsWith' | 'greaterThan' | 'lessThan' | 'between' | 'in' | 'dateAfter' | 'dateBefore' | 'dateBetween';
+  value: string | number | string[] | { start: string; end: string };
+}
+
+interface FilterSet {
+  id: string;
+  name: string;
+  conditions: FilterCondition[];
+}
+
+interface Filters {
+  [key: string]: FilterCondition[];
+}
+
+// Field Configuration
+export interface FieldConfig {
   name: string;
   label: string;
-  type: 'text' | 'textarea' | 'number' | 'date' | 'email' | 'select';
-  required: boolean;
-  options?: { value: string; label: string }[]; // For select fields
+  type: 'text' | 'email' | 'number' | 'date' | 'textarea' | 'select' | 'multiselect' | 'boolean' | 'phone' | 'url';
+  required?: boolean;
+  placeholder?: string;
+  options?: { value: string; label: string }[];
+  dependsOn?: string; // Table name this field depends on
+  validation?: {
+    min?: number;
+    max?: number;
+    pattern?: string;
+    custom?: (value: any) => boolean | string;
+  };
+  display?: {
+    showInTable?: boolean;
+    tableOrder?: number;
+    groupWith?: string;
+  };
 }
 
-interface TableConfig {
+// Table Configuration
+export interface TableConfig {
+  id: string;
   name: string;
-  level: number;
-  parentTable?: string;
-  businessKeys: string[];
-  fields: Field[];
-  displayField: string;
-  apiEndpoint?: string; // Optional custom endpoint
+  icon: React.ReactNode;
+  businessKeyPrefix: string;
+  dependencies: string[]; // Other table IDs this depends on
+  fields: FieldConfig[];
+  display?: {
+    defaultSort?: string;
+    pageSize?: number;
+    allowDuplicate?: boolean;
+    allowDelete?: boolean;
+  };
 }
 
-interface SubdomainConfig {
-  name: string;
-  mainTable: string;
-  tables: Record<string, TableConfig>;
+// Component Props Interface
+export interface EnhancedDataEntrySystemProps {
+  tableConfigs: TableConfig[];
+  initialData?: DataStore;
+  onDataChange?: (data: DataStore) => void;
+  theme?: {
+    primaryColor?: string;
+    borderRadius?: string;
+  };
 }
 
-interface DomainConfig {
-  name: string;
-  subdomains: Record<string, SubdomainConfig>;
-}
-
-interface PageConfig {
-  domain: string;
-  subdomain: string;
-  config: SubdomainConfig;
-}
-
-interface TableRecord {
-  id: number;
-  [key: string]: any;
-}
-
-interface FormState {
-  [tableName: string]: TableRecord | null;
-}
-
-interface SubmitResponse {
-  success: boolean;
-  message: string;
-  data?: any;
-}
-
-// Dynamic API Service
-class DynamicApiService {
-  // Get page configuration for specific domain/subdomain
-  async getPageConfig(domain: string, subdomain: string): Promise<PageConfig> {
-    const response: AxiosResponse<PageConfig> = await axios.get(
-      `${API_BASE_URL}/config/${domain}/${subdomain}`
-    );
-    return response.data;
+// Default configurations for the business example
+const defaultTableConfigs: TableConfig[] = [
+  {
+    id: 'companies',
+    name: 'Companies',
+    icon: <Building size={18} />,
+    businessKeyPrefix: 'COMP',
+    dependencies: [],
+    fields: [
+      { 
+        name: 'name', 
+        label: 'Company Name', 
+        type: 'text', 
+        required: true, 
+        placeholder: 'Enter company name',
+        display: { showInTable: true, tableOrder: 1 }
+      },
+      { 
+        name: 'industry', 
+        label: 'Industry', 
+        type: 'select', 
+        placeholder: 'Select industry',
+        options: [
+          { value: 'Technology', label: 'Technology' },
+          { value: 'Healthcare', label: 'Healthcare' },
+          { value: 'Finance', label: 'Finance' },
+          { value: 'Energy', label: 'Energy' },
+          { value: 'Manufacturing', label: 'Manufacturing' },
+          { value: 'Retail', label: 'Retail' },
+          { value: 'Education', label: 'Education' },
+          { value: 'Other', label: 'Other' }
+        ],
+        display: { showInTable: true, tableOrder: 2 }
+      },
+      { 
+        name: 'website', 
+        label: 'Website', 
+        type: 'url', 
+        placeholder: 'https://example.com',
+        display: { showInTable: true, tableOrder: 3 }
+      },
+      { 
+        name: 'address', 
+        label: 'Address', 
+        type: 'textarea', 
+        placeholder: 'Enter company address',
+        display: { showInTable: false }
+      },
+      { 
+        name: 'phone', 
+        label: 'Phone', 
+        type: 'phone', 
+        placeholder: '+1 (555) 123-4567',
+        display: { showInTable: false }
+      },
+      { 
+        name: 'employeeCount', 
+        label: 'Employee Count', 
+        type: 'number', 
+        placeholder: 'Number of employees',
+        validation: { min: 1 },
+        display: { showInTable: true, tableOrder: 4 }
+      }
+    ]
+  },
+  {
+    id: 'departments',
+    name: 'Departments',
+    icon: <Users size={18} />,
+    businessKeyPrefix: 'DEPT',
+    dependencies: ['companies'],
+    fields: [
+      { name: 'companyId', label: 'Company', type: 'select', required: true, dependsOn: 'companies' },
+      { 
+        name: 'name', 
+        label: 'Department Name', 
+        type: 'text', 
+        required: true, 
+        placeholder: 'Enter department name',
+        display: { showInTable: true, tableOrder: 1 }
+      },
+      { 
+        name: 'budget', 
+        label: 'Budget', 
+        type: 'number', 
+        placeholder: 'Enter budget',
+        validation: { min: 0 },
+        display: { showInTable: true, tableOrder: 2 }
+      },
+      { 
+        name: 'description', 
+        label: 'Description', 
+        type: 'textarea', 
+        placeholder: 'Enter description',
+        display: { showInTable: false }
+      },
+      { 
+        name: 'isActive', 
+        label: 'Active', 
+        type: 'boolean',
+        display: { showInTable: true, tableOrder: 3 }
+      }
+    ]
+  },
+  {
+    id: 'employees',
+    name: 'Employees',
+    icon: <Users size={18} />,
+    businessKeyPrefix: 'EMP',
+    dependencies: ['companies'],
+    fields: [
+      { name: 'companyId', label: 'Company', type: 'select', required: true, dependsOn: 'companies' },
+      { name: 'departmentId', label: 'Department (Optional)', type: 'select', dependsOn: 'departments' },
+      { 
+        name: 'firstName', 
+        label: 'First Name', 
+        type: 'text', 
+        required: true, 
+        placeholder: 'Enter first name',
+        display: { showInTable: true, tableOrder: 1 }
+      },
+      { 
+        name: 'lastName', 
+        label: 'Last Name', 
+        type: 'text', 
+        required: true, 
+        placeholder: 'Enter last name',
+        display: { showInTable: true, tableOrder: 2 }
+      },
+      { 
+        name: 'email', 
+        label: 'Email', 
+        type: 'email', 
+        required: true, 
+        placeholder: 'Enter email',
+        display: { showInTable: true, tableOrder: 3 }
+      },
+      { 
+        name: 'position', 
+        label: 'Position', 
+        type: 'text', 
+        placeholder: 'Enter position',
+        display: { showInTable: true, tableOrder: 4 }
+      },
+      { 
+        name: 'salary', 
+        label: 'Salary', 
+        type: 'number', 
+        placeholder: 'Enter salary',
+        validation: { min: 0 },
+        display: { showInTable: false }
+      },
+      { 
+        name: 'phone', 
+        label: 'Phone', 
+        type: 'phone', 
+        placeholder: '+1 (555) 123-4567',
+        display: { showInTable: false }
+      },
+      { 
+        name: 'startDate', 
+        label: 'Start Date', 
+        type: 'date',
+        display: { showInTable: false }
+      }
+    ]
+  },
+  {
+    id: 'projects',
+    name: 'Projects',
+    icon: <FolderOpen size={18} />,
+    businessKeyPrefix: 'PROJ',
+    dependencies: ['companies'],
+    fields: [
+      { name: 'companyId', label: 'Company', type: 'select', required: true, dependsOn: 'companies' },
+      { 
+        name: 'name', 
+        label: 'Project Name', 
+        type: 'text', 
+        required: true, 
+        placeholder: 'Enter project name',
+        display: { showInTable: true, tableOrder: 1 }
+      },
+      { 
+        name: 'startDate', 
+        label: 'Start Date', 
+        type: 'date', 
+        required: true,
+        display: { showInTable: true, tableOrder: 2 }
+      },
+      { 
+        name: 'endDate', 
+        label: 'End Date', 
+        type: 'date',
+        display: { showInTable: true, tableOrder: 3 }
+      },
+      { 
+        name: 'status', 
+        label: 'Status', 
+        type: 'select', 
+        options: [
+          { value: 'Planning', label: 'Planning' },
+          { value: 'In Progress', label: 'In Progress' },
+          { value: 'Completed', label: 'Completed' },
+          { value: 'On Hold', label: 'On Hold' },
+          { value: 'Cancelled', label: 'Cancelled' }
+        ],
+        display: { showInTable: true, tableOrder: 4 }
+      },
+      { name: 'assignedEmployees', label: 'Assigned Employees', type: 'multiselect', dependsOn: 'employees' },
+      { 
+        name: 'description', 
+        label: 'Description', 
+        type: 'textarea', 
+        placeholder: 'Enter project description',
+        display: { showInTable: false }
+      },
+      { 
+        name: 'budget', 
+        label: 'Budget', 
+        type: 'number', 
+        placeholder: 'Enter budget',
+        validation: { min: 0 },
+        display: { showInTable: false }
+      }
+    ]
+  },
+  {
+    id: 'tasks',
+    name: 'Tasks',
+    icon: <CheckSquare size={18} />,
+    businessKeyPrefix: 'TASK',
+    dependencies: ['projects'],
+    fields: [
+      { name: 'projectId', label: 'Project', type: 'select', required: true, dependsOn: 'projects' },
+      { name: 'assignedEmployeeId', label: 'Assigned Employee', type: 'select', dependsOn: 'employees' },
+      { 
+        name: 'title', 
+        label: 'Task Title', 
+        type: 'text', 
+        required: true, 
+        placeholder: 'Enter task title',
+        display: { showInTable: true, tableOrder: 1 }
+      },
+      { 
+        name: 'description', 
+        label: 'Description', 
+        type: 'textarea', 
+        placeholder: 'Enter task description',
+        display: { showInTable: false }
+      },
+      { 
+        name: 'priority', 
+        label: 'Priority', 
+        type: 'select', 
+        options: [
+          { value: 'Low', label: 'Low' },
+          { value: 'Medium', label: 'Medium' },
+          { value: 'High', label: 'High' },
+          { value: 'Critical', label: 'Critical' }
+        ],
+        display: { showInTable: true, tableOrder: 2 }
+      },
+      { 
+        name: 'status', 
+        label: 'Status', 
+        type: 'select', 
+        options: [
+          { value: 'Not Started', label: 'Not Started' },
+          { value: 'In Progress', label: 'In Progress' },
+          { value: 'Completed', label: 'Completed' },
+          { value: 'On Hold', label: 'On Hold' }
+        ],
+        display: { showInTable: true, tableOrder: 3 }
+      },
+      { 
+        name: 'dueDate', 
+        label: 'Due Date', 
+        type: 'date',
+        display: { showInTable: true, tableOrder: 4 }
+      },
+      { 
+        name: 'estimatedHours', 
+        label: 'Estimated Hours', 
+        type: 'number', 
+        placeholder: 'Enter estimated hours',
+        validation: { min: 0 },
+        display: { showInTable: false }
+      }
+    ]
   }
+];
 
-  // Generic table operations
-  async getTableData(tableName: string, filters?: Record<string, any>): Promise<TableRecord[]> {
-    const response: AxiosResponse<TableRecord[]> = await axios.get(
-      `${API_BASE_URL}/tables/${tableName}`,
-      { params: filters }
-    );
-    // Handle both array and object response formats
-    return Array.isArray(response.data) ? response.data : response.data.data || [];
-  }
+// Default sample data
+const defaultInitialData: DataStore = {
+  companies: [
+    {
+      id: 'comp_1',
+      businessKey: 'COMP-0001',
+      name: 'Tech Solutions Inc',
+      industry: 'Technology',
+      website: 'https://techsolutions.com',
+      address: '123 Innovation Drive, San Francisco, CA',
+      phone: '+1 (555) 123-4567',
+      employeeCount: 150,
+      createdAt: '2024-01-15T10:00:00Z',
+      updatedAt: '2024-01-15T10:00:00Z'
+    },
+    {
+      id: 'comp_2',
+      businessKey: 'COMP-0002',
+      name: 'Green Energy Corp',
+      industry: 'Energy',
+      website: 'https://greenenergy.com',
+      address: '456 Renewable Ave, Austin, TX',
+      phone: '+1 (555) 987-6543',
+      employeeCount: 75,
+      createdAt: '2024-02-01T09:30:00Z',
+      updatedAt: '2024-02-01T09:30:00Z'
+    },
+    {
+      id: 'comp_3',
+      businessKey: 'COMP-0003',
+      name: 'Healthcare Plus',
+      industry: 'Healthcare',
+      website: 'https://healthcareplus.com',
+      address: '789 Medical Center Blvd, Boston, MA',
+      phone: '+1 (555) 456-7890',
+      employeeCount: 200,
+      createdAt: '2024-02-15T14:20:00Z',
+      updatedAt: '2024-02-15T14:20:00Z'
+    }
+  ],
+  departments: [
+    {
+      id: 'dept_1',
+      businessKey: 'DEPT-0001',
+      companyId: 'comp_1',
+      name: 'Engineering',
+      budget: 500000,
+      description: 'Software development and technical operations',
+      isActive: true,
+      createdAt: '2024-01-16T11:00:00Z',
+      updatedAt: '2024-01-16T11:00:00Z'
+    },
+    {
+      id: 'dept_2',
+      businessKey: 'DEPT-0002',
+      companyId: 'comp_1',
+      name: 'Marketing',
+      budget: 200000,
+      description: 'Brand management and customer acquisition',
+      isActive: true,
+      createdAt: '2024-01-17T13:30:00Z',
+      updatedAt: '2024-01-17T13:30:00Z'
+    },
+    {
+      id: 'dept_3',
+      businessKey: 'DEPT-0003',
+      companyId: 'comp_2',
+      name: 'Research & Development',
+      budget: 750000,
+      description: 'Clean energy research and development',
+      isActive: true,
+      createdAt: '2024-02-02T10:15:00Z',
+      updatedAt: '2024-02-02T10:15:00Z'
+    }
+  ],
+  employees: [
+    {
+      id: 'emp_1',
+      businessKey: 'EMP-0001',
+      companyId: 'comp_1',
+      departmentId: 'dept_1',
+      firstName: 'John',
+      lastName: 'Smith',
+      email: 'john.smith@techsolutions.com',
+      position: 'Senior Developer',
+      salary: 95000,
+      phone: '+1 (555) 111-2222',
+      startDate: '2023-03-15',
+      createdAt: '2024-01-18T08:00:00Z',
+      updatedAt: '2024-01-18T08:00:00Z'
+    },
+    {
+      id: 'emp_2',
+      businessKey: 'EMP-0002',
+      companyId: 'comp_1',
+      departmentId: 'dept_2',
+      firstName: 'Sarah',
+      lastName: 'Johnson',
+      email: 'sarah.johnson@techsolutions.com',
+      position: 'Marketing Manager',
+      salary: 78000,
+      phone: '+1 (555) 333-4444',
+      startDate: '2023-06-01',
+      createdAt: '2024-01-19T09:15:00Z',
+      updatedAt: '2024-01-19T09:15:00Z'
+    },
+    {
+      id: 'emp_3',
+      businessKey: 'EMP-0003',
+      companyId: 'comp_2',
+      departmentId: 'dept_3',
+      firstName: 'Michael',
+      lastName: 'Chen',
+      email: 'michael.chen@greenenergy.com',
+      position: 'Research Scientist',
+      salary: 105000,
+      phone: '+1 (555) 555-6666',
+      startDate: '2023-01-10',
+      createdAt: '2024-02-03T07:45:00Z',
+      updatedAt: '2024-02-03T07:45:00Z'
+    }
+  ],
+  projects: [
+    {
+      id: 'proj_1',
+      businessKey: 'PROJ-0001',
+      companyId: 'comp_1',
+      name: 'Mobile App Redesign',
+      startDate: '2024-03-01',
+      endDate: '2024-06-30',
+      status: 'In Progress',
+      description: 'Complete redesign of the mobile application interface',
+      assignedEmployees: ['emp_1'],
+      budget: 150000,
+      createdAt: '2024-02-20T10:30:00Z',
+      updatedAt: '2024-02-20T10:30:00Z'
+    },
+    {
+      id: 'proj_2',
+      businessKey: 'PROJ-0002',
+      companyId: 'comp_2',
+      name: 'Solar Panel Efficiency Study',
+      startDate: '2024-01-15',
+      endDate: '2024-12-31',
+      status: 'In Progress',
+      description: 'Research project to improve solar panel efficiency by 15%',
+      assignedEmployees: ['emp_3'],
+      budget: 500000,
+      createdAt: '2024-02-05T11:00:00Z',
+      updatedAt: '2024-02-05T11:00:00Z'
+    }
+  ],
+  tasks: [
+    {
+      id: 'task_1',
+      businessKey: 'TASK-0001',
+      projectId: 'proj_1',
+      assignedEmployeeId: 'emp_1',
+      title: 'Design new login screen',
+      description: 'Create mockups and implement new login interface',
+      priority: 'High',
+      status: 'In Progress',
+      dueDate: '2024-03-15',
+      estimatedHours: 40,
+      createdAt: '2024-02-21T14:20:00Z',
+      updatedAt: '2024-02-21T14:20:00Z'
+    },
+    {
+      id: 'task_2',
+      businessKey: 'TASK-0002',
+      projectId: 'proj_2',
+      assignedEmployeeId: 'emp_3',
+      title: 'Test new photovoltaic materials',
+      description: 'Laboratory testing of advanced photovoltaic materials',
+      priority: 'Critical',
+      status: 'Not Started',
+      dueDate: '2024-04-01',
+      estimatedHours: 80,
+      createdAt: '2024-02-06T09:30:00Z',
+      updatedAt: '2024-02-06T09:30:00Z'
+    }
+  ]
+};
 
-  async createRecord(tableName: string, data: any): Promise<TableRecord> {
-    const response: AxiosResponse<TableRecord> = await axios.post(
-      `${API_BASE_URL}/tables/${tableName}`,
-      data
-    );
-    return response.data;
-  }
+export function EnhancedDataEntrySystem({
+  tableConfigs = defaultTableConfigs,
+  initialData = defaultInitialData,
+  onDataChange,
+  theme
+}: EnhancedDataEntrySystemProps) {
+  const [dataStore, setDataStore] = useState<DataStore>(initialData);
+  const [activeTable, setActiveTable] = useState<string>(tableConfigs[0]?.id || '');
+  const [editingItem, setEditingItem] = useState<any>(null);
+  const [showEditDialog, setShowEditDialog] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [filters, setFilters] = useState<Filters>({});
+  const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
+  const [newCondition, setNewCondition] = useState<Partial<FilterCondition>>({ operator: 'equals' });
 
-  async updateRecord(tableName: string, id: number, data: any): Promise<TableRecord> {
-    const response: AxiosResponse<TableRecord> = await axios.put(
-      `${API_BASE_URL}/tables/${tableName}/${id}`,
-      data
-    );
-    return response.data;
-  }
+  // Reset search when switching tables
+  useEffect(() => {
+    setSearchTerm('');
+    setShowAdvancedFilters(false);
+    setNewCondition({ operator: 'equals' });
+  }, [activeTable]);
 
-  async deleteRecord(tableName: string, id: number): Promise<void> {
-    await axios.delete(`${API_BASE_URL}/tables/${tableName}/${id}`);
-  }
+  useEffect(() => {
+    if (!showAdvancedFilters) {
+      setNewCondition({ operator: 'equals' });
+    }
+  }, [showAdvancedFilters]);
 
-  // Submit complete form hierarchy
-  async submitFormData(domain: string, subdomain: string, data: FormState): Promise<any> {
-    const response = await axios.post(
-      `${API_BASE_URL}/submit/${domain}/${subdomain}`,
-      data
-    );
-    return response.data;
-  }
-}
+  // Notify parent of data changes
+  useEffect(() => {
+    if (onDataChange) {
+      onDataChange(dataStore);
+    }
+  }, [dataStore, onDataChange]);
 
-const apiService = new DynamicApiService();
+  // Generate business key
+  const generateBusinessKey = (prefix: string, existingItems: BaseEntity[]) => {
+    const maxNumber = existingItems
+      .filter(item => item.businessKey.startsWith(prefix))
+      .map(item => parseInt(item.businessKey.split('-')[1]) || 0)
+      .reduce((max, num) => Math.max(max, num), 0);
+    return `${prefix}-${String(maxNumber + 1).padStart(4, '0')}`;
+  };
 
-// Form Field Component - Completely Dynamic
-const DynamicFormField: React.FC<{
-  field: Field;
-  value: any;
-  onChange: (fieldName: string, value: any) => void;
-  error?: string;
-}> = ({ field, value, onChange, error }) => {
-  const renderInput = () => {
-    const baseClassName = "w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500";
-    
+  // Get default value for field type
+  const getDefaultFieldValue = (field: FieldConfig): any => {
     switch (field.type) {
-      case 'textarea':
-        return (
-          <textarea
-            className={baseClassName}
-            value={value || ''}
-            onChange={(e) => onChange(field.name, e.target.value)}
-            required={field.required}
-            rows={3}
-          />
-        );
-      
       case 'number':
-        return (
-          <input
-            type="number"
-            className={baseClassName}
-            value={value || ''}
-            onChange={(e) => onChange(field.name, e.target.value ? parseFloat(e.target.value) : '')}
-            required={field.required}
-            step="any"
-          />
-        );
-      
+        return 0;
+      case 'boolean':
+        return false;
+      case 'multiselect':
+        return [];
       case 'date':
-        return (
-          <input
-            type="date"
-            className={baseClassName}
-            value={value || ''}
-            onChange={(e) => onChange(field.name, e.target.value)}
-            required={field.required}
-          />
-        );
-      
-      case 'email':
-        return (
-          <input
-            type="email"
-            className={baseClassName}
-            value={value || ''}
-            onChange={(e) => onChange(field.name, e.target.value)}
-            required={field.required}
-          />
-        );
-      
-      case 'select':
-        return (
-          <select
-            className={baseClassName}
-            value={value || ''}
-            onChange={(e) => onChange(field.name, e.target.value)}
-            required={field.required}
-          >
-            <option value="">-- Select --</option>
-            {field.options?.map(opt => (
-              <option key={opt.value} value={opt.value}>{opt.label}</option>
-            ))}
-          </select>
-        );
-      
+        return '';
       default:
-        return (
-          <input
-            type="text"
-            className={baseClassName}
-            value={value || ''}
-            onChange={(e) => onChange(field.name, e.target.value)}
-            required={field.required}
-          />
-        );
+        return '';
     }
   };
 
-  return (
-    <div className="mb-4">
-      <label className="block text-sm font-medium text-gray-700 mb-1">
-        {field.label}
-        {field.required && <span className="text-red-500 ml-1">*</span>}
-      </label>
-      {renderInput()}
-      {error && <p className="text-red-500 text-sm mt-1">{error}</p>}
-    </div>
-  );
-};
+  // Create new item
+  const createNewItem = (tableId: string) => {
+    const config = tableConfigs.find(t => t.id === tableId);
+    if (!config) return;
 
-// Dynamic Table Form
-const DynamicTableForm: React.FC<{
-  tableConfig: TableConfig;
-  tableName: string;
-  parentId?: number;
-  parentField?: string;
-  onSave: (record: TableRecord) => void;
-  onCancel: () => void;
-}> = ({ tableConfig, tableName, parentId, parentField, onSave, onCancel }) => {
-  const [formData, setFormData] = useState<Record<string, any>>({});
-  const [errors, setErrors] = useState<Record<string, string>>({});
-  const [saving, setSaving] = useState(false);
+    const newItem: BaseEntity = {
+      id: `${tableId}_${Date.now()}`,
+      businessKey: generateBusinessKey(config.businessKeyPrefix, dataStore[tableId] || []),
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
 
-  const handleFieldChange = (fieldName: string, value: any) => {
-    setFormData(prev => ({ ...prev, [fieldName]: value }));
-    setErrors(prev => ({ ...prev, [fieldName]: '' }));
-  };
-
-  const validate = (): boolean => {
-    const newErrors: Record<string, string> = {};
-    tableConfig.fields.forEach(field => {
-      if (field.required && !formData[field.name]) {
-        newErrors[field.name] = `${field.label} is required`;
-      }
+    // Initialize all fields with default values
+    config.fields.forEach(field => {
+      (newItem as any)[field.name] = getDefaultFieldValue(field);
     });
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
+
+    setEditingItem(newItem);
+    setShowEditDialog(true);
   };
 
-  const handleSubmit = async () => {
-    if (!validate()) return;
+  // Edit existing item
+  const editItem = (item: BaseEntity) => {
+    setEditingItem({ ...item });
+    setShowEditDialog(true);
+  };
 
-    setSaving(true);
-    try {
-      const dataToSave = { ...formData };
-      if (parentId && parentField) {
-        dataToSave[parentField] = parentId;
+  // Save item
+  const saveItem = () => {
+    if (!editingItem) return;
+
+    const updatedItem = {
+      ...editingItem,
+      updatedAt: new Date().toISOString()
+    };
+
+    setDataStore(prev => {
+      const tableData = prev[activeTable] || [];
+      const existingIndex = tableData.findIndex((item: BaseEntity) => item.id === editingItem.id);
+      const newData = [...tableData];
+      
+      if (existingIndex >= 0) {
+        newData[existingIndex] = updatedItem;
+        toast.success(`${tableConfigs.find(t => t.id === activeTable)?.name.slice(0, -1)} updated successfully`);
+      } else {
+        newData.push(updatedItem);
+        toast.success(`${tableConfigs.find(t => t.id === activeTable)?.name.slice(0, -1)} created successfully`);
       }
 
-      const savedRecord = await apiService.createRecord(tableName, dataToSave);
-      onSave(savedRecord);
-    } catch (error: any) {
-      console.error('Error saving:', error);
-      alert(error.response?.data?.detail || 'Error saving record');
-    } finally {
-      setSaving(false);
+      return { ...prev, [activeTable]: newData };
+    });
+
+    setShowEditDialog(false);
+    setEditingItem(null);
+  };
+
+  // Delete item
+  const deleteItem = (id: string) => {
+    if (confirm('Are you sure you want to delete this item?')) {
+      setDataStore(prev => ({
+        ...prev,
+        [activeTable]: (prev[activeTable] || []).filter((item: BaseEntity) => item.id !== id)
+      }));
+      toast.success('Item deleted successfully');
     }
   };
 
-  return (
-    <div className="bg-white p-6 rounded-lg shadow-md">
-      <h3 className="text-lg font-semibold mb-4">
-        Add New {tableConfig.name}
-      </h3>
+  // Duplicate item
+  const duplicateItem = (item: BaseEntity) => {
+    const config = tableConfigs.find(t => t.id === activeTable);
+    if (!config) return;
 
-      {tableConfig.fields.map(field => (
-        <DynamicFormField
-          key={field.name}
-          field={field}
-          value={formData[field.name]}
-          onChange={handleFieldChange}
-          error={errors[field.name]}
-        />
-      ))}
+    const duplicatedItem = {
+      ...item,
+      id: `${activeTable}_${Date.now()}`,
+      businessKey: generateBusinessKey(config.businessKeyPrefix, dataStore[activeTable] || []),
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+    setEditingItem(duplicatedItem);
+    setShowEditDialog(true);
+  };
 
-      <div className="flex gap-3 mt-6">
-        <button
-          onClick={handleSubmit}
-          disabled={saving}
-          className="px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 disabled:opacity-50"
-        >
-          {saving ? 'Saving...' : 'Save'}
-        </button>
-        <button
-          onClick={onCancel}
-          className="px-4 py-2 bg-gray-300 text-gray-700 rounded-md hover:bg-gray-400"
-        >
-          Cancel
-        </button>
-      </div>
-    </div>
-  );
-};
-
-// Dynamic Data Browser
-const DynamicDataBrowser: React.FC<{
-  tableName: string;
-  tableConfig: TableConfig;
-  parentId?: number;
-  parentField?: string;
-  onSelect: (record: TableRecord) => void;
-  showAll: boolean;
-  onToggleShowAll: (checked: boolean) => void;
-}> = ({ tableName, tableConfig, parentId, parentField, onSelect, showAll, onToggleShowAll }) => {
-  const [data, setData] = useState<TableRecord[]>([]);
-  const [loading, setLoading] = useState(false);
-
-  useEffect(() => {
-    loadData();
-  }, [showAll, parentId, tableName]);
-
-  const loadData = async () => {
-    setLoading(true);
-    try {
-      const filters: Record<string, any> = {};
-      if (!showAll && parentId && parentField) {
-        filters[parentField] = parentId;
+  // Get options for select fields
+  const getSelectOptions = (field: FieldConfig, editingCompanyId?: string): { value: string; label: string }[] => {
+    if (field.options) return field.options;
+    
+    if (field.dependsOn) {
+      const dependentData = dataStore[field.dependsOn] || [];
+      
+      // Filter departments by company if editing an employee
+      if (field.dependsOn === 'departments' && editingCompanyId) {
+        return dependentData
+          .filter((item: any) => item.companyId === editingCompanyId)
+          .map((item: any) => ({
+            value: item.id,
+            label: `${item.businessKey} - ${item.name || item.title || (item.firstName && item.lastName ? `${item.firstName} ${item.lastName}` : 'Unnamed')}`
+          }));
       }
       
-      const result = await apiService.getTableData(tableName, filters);
-      setData(result);
-    } catch (error) {
-      console.error('Error loading data:', error);
-    } finally {
-      setLoading(false);
+      // Filter employees by company if editing a project
+      if (field.dependsOn === 'employees' && editingCompanyId) {
+        return dependentData
+          .filter((item: any) => item.companyId === editingCompanyId)
+          .map((item: any) => ({
+            value: item.id,
+            label: `${item.businessKey} - ${item.firstName && item.lastName ? `${item.firstName} ${item.lastName}` : item.name || 'Unnamed'}`
+          }));
+      }
+      
+      return dependentData.map((item: any) => ({
+        value: item.id,
+        label: `${item.businessKey} - ${item.name || item.title || (item.firstName && item.lastName ? `${item.firstName} ${item.lastName}` : 'Unnamed')}`
+      }));
+    }
+    
+    return [];
+  };
+
+  // Apply filter condition
+  const applyFilterCondition = (item: BaseEntity, condition: FilterCondition): boolean => {
+    const fieldValue = item[condition.field];
+    const { operator, value } = condition;
+
+    if (fieldValue === undefined || fieldValue === null || fieldValue === '') {
+      return operator === 'equals' && (value === '' || value === null);
+    }
+
+    switch (operator) {
+      case 'equals':
+        return String(fieldValue).toLowerCase() === String(value).toLowerCase();
+      case 'contains':
+        return String(fieldValue).toLowerCase().includes(String(value).toLowerCase());
+      case 'startsWith':
+        return String(fieldValue).toLowerCase().startsWith(String(value).toLowerCase());
+      case 'endsWith':
+        return String(fieldValue).toLowerCase().endsWith(String(value).toLowerCase());
+      case 'greaterThan':
+        return Number(fieldValue) > Number(value);
+      case 'lessThan':
+        return Number(fieldValue) < Number(value);
+      case 'between':
+        if (typeof value === 'object' && 'start' in value && 'end' in value) {
+          const numValue = Number(fieldValue);
+          return numValue >= Number(value.start) && numValue <= Number(value.end);
+        }
+        return false;
+      case 'in':
+        if (Array.isArray(value)) {
+          return value.includes(String(fieldValue));
+        }
+        return false;
+      case 'dateAfter':
+        return new Date(fieldValue) > new Date(String(value));
+      case 'dateBefore':
+        return new Date(fieldValue) < new Date(String(value));
+      case 'dateBetween':
+        if (typeof value === 'object' && 'start' in value && 'end' in value) {
+          const itemDate = new Date(fieldValue);
+          return itemDate >= new Date(value.start) && itemDate <= new Date(value.end);
+        }
+        return false;
+      default:
+        return true;
     }
   };
 
-  if (loading) {
+  // Filter items based on search and advanced filters
+  const getFilteredItems = (): BaseEntity[] => {
+    let items = dataStore[activeTable] || [];
+    
+    // Apply search filter
+    if (searchTerm) {
+      items = items.filter((item: BaseEntity) => 
+        Object.values(item).some(value => 
+          String(value).toLowerCase().includes(searchTerm.toLowerCase())
+        )
+      );
+    }
+
+    // Apply advanced filters
+    const tableFilters = filters[activeTable] || [];
+    if (tableFilters.length > 0) {
+      items = items.filter((item: BaseEntity) => 
+        tableFilters.every(condition => applyFilterCondition(item, condition))
+      );
+    }
+
+    return items;
+  };
+
+  // Add filter condition
+  const addFilterCondition = (condition: FilterCondition) => {
+    setFilters(prev => ({
+      ...prev,
+      [activeTable]: [...(prev[activeTable] || []), condition]
+    }));
+  };
+
+  // Remove filter condition
+  const removeFilterCondition = (index: number) => {
+    setFilters(prev => ({
+      ...prev,
+      [activeTable]: (prev[activeTable] || []).filter((_, i) => i !== index)
+    }));
+  };
+
+  // Clear all filters for current table
+  const clearFilters = () => {
+    setSearchTerm('');
+    setFilters(prev => ({
+      ...prev,
+      [activeTable]: []
+    }));
+  };
+
+  // Get filter operators for field type
+  const getFilterOperators = (fieldType: string) => {
+    switch (fieldType) {
+      case 'text':
+      case 'email':
+      case 'textarea':
+      case 'phone':
+      case 'url':
+        return [
+          { value: 'equals', label: 'Equals' },
+          { value: 'contains', label: 'Contains' },
+          { value: 'startsWith', label: 'Starts with' },
+          { value: 'endsWith', label: 'Ends with' },
+        ];
+      case 'number':
+        return [
+          { value: 'equals', label: 'Equals' },
+          { value: 'greaterThan', label: 'Greater than' },
+          { value: 'lessThan', label: 'Less than' },
+          { value: 'between', label: 'Between' },
+        ];
+      case 'date':
+        return [
+          { value: 'equals', label: 'On date' },
+          { value: 'dateAfter', label: 'After' },
+          { value: 'dateBefore', label: 'Before' },
+          { value: 'dateBetween', label: 'Between' },
+        ];
+      case 'select':
+      case 'boolean':
+        return [
+          { value: 'equals', label: 'Equals' },
+          { value: 'in', label: 'One of' },
+        ];
+      default:
+        return [{ value: 'equals', label: 'Equals' }];
+    }
+  };
+
+  // Get filterable fields for current table
+  const getFilterableFields = () => {
+    const config = tableConfigs.find(t => t.id === activeTable);
+    if (!config) return [];
+
+    const fields = [
+      { name: 'businessKey', label: 'Business Key', type: 'text' },
+      ...config.fields,
+      { name: 'createdAt', label: 'Created Date', type: 'date' },
+      { name: 'updatedAt', label: 'Updated Date', type: 'date' },
+    ];
+    return fields;
+  };
+
+  
+// Get current table config
+const currentConfig = tableConfigs.find(t => t.id === activeTable);
+if (!currentConfig) {
+  return <div>No table configuration found</div>;
+}
+
+const filteredItems = getFilteredItems();
+const activeFilters = filters[activeTable] || [];
+const hasActiveFilters = Boolean(searchTerm) || activeFilters.length > 0;
+
+const getTableFields = (config: TableConfig) =>
+  config.fields
+    .filter(field => field.display?.showInTable !== false)
+    .sort((a, b) => (a.display?.tableOrder || 999) - (b.display?.tableOrder || 999))
+    .slice(0, 4);
+
+const renderFieldValue = (item: BaseEntity, field: FieldConfig) => {
+  const value = item[field.name];
+
+  if (value === undefined || value === null || value === '') {
+    return <Typography.Text type="secondary">-</Typography.Text>;
+  }
+
+  switch (field.type) {
+    case 'boolean':
+      return <Tag color={value ? 'green' : 'default'}>{value ? 'Yes' : 'No'}</Tag>;
+    case 'multiselect':
+      return Array.isArray(value) && value.length > 0 ? (
+        <Space size={[4, 4]} wrap>
+          {value.map((id: string) => {
+            const option = getSelectOptions(field, item.companyId).find(opt => opt.value === id);
+            return <Tag key={id}>{option ? option.label : id}</Tag>;
+          })}
+        </Space>
+      ) : (
+        <Typography.Text type="secondary">-</Typography.Text>
+      );
+    case 'select':
+      if (field.dependsOn) {
+        const relatedItem = (dataStore[field.dependsOn] || []).find((dep: BaseEntity) => dep.id === value);
+        return relatedItem ? <Tag>{relatedItem.businessKey}</Tag> : <Typography.Text type="secondary">None</Typography.Text>;
+      }
+      if (field.options) {
+        const option = field.options.find(opt => opt.value === value);
+        return option ? option.label : value;
+      }
+      return value;
+    case 'textarea':
+      return (
+        <Tooltip title={String(value)}>
+          <span>{String(value).length > 50 ? `${String(value).substring(0, 50)}...` : String(value)}</span>
+        </Tooltip>
+      );
+    case 'date':
+      return dayjs(value).isValid() ? dayjs(value).format('YYYY-MM-DD') : String(value);
+    case 'number':
+      return Number(value).toLocaleString();
+    case 'url':
+      return (
+        <a href={value} target="_blank" rel="noopener noreferrer">
+          {String(value).length > 30 ? `${String(value).substring(0, 30)}...` : value}
+        </a>
+      );
+    case 'email':
+      return <a href={`mailto:${value}`}>{value}</a>;
+      case 'phone':
+        return <a href={`tel:${value}`}>{value}</a>;
+    default:
+      return String(value);
+  }
+};
+
+const buildColumns = (config: TableConfig): ColumnsType<BaseEntity> => {
+  const displayFields = getTableFields(config);
+
+  return [
+    {
+      title: 'Business Key',
+      dataIndex: 'businessKey',
+      key: 'businessKey',
+      render: (value: string) => <Tag color="blue">{value}</Tag>,
+      sorter: (a, b) => a.businessKey.localeCompare(b.businessKey),
+    },
+    ...displayFields.map(field => ({
+      title: field.label,
+      dataIndex: field.name,
+      key: field.name,
+      render: (_: any, record: BaseEntity) => renderFieldValue(record, field),
+    })),
+    {
+      title: 'Created',
+      dataIndex: 'createdAt',
+      key: 'createdAt',
+      width: 140,
+      render: (value: string) => dayjs(value).format('YYYY-MM-DD'),
+      sorter: (a, b) => dayjs(a.createdAt).unix() - dayjs(b.createdAt).unix(),
+    },
+    {
+      title: 'Actions',
+      key: 'actions',
+      width: 160,
+      render: (_: any, record: BaseEntity) => (
+        <Space>
+          <Tooltip title="Edit">
+            <Button type="link" icon={<EditOutlined />} onClick={() => editItem(record)} />
+          </Tooltip>
+          {config.display?.allowDuplicate !== false && (
+            <Tooltip title="Duplicate">
+              <Button type="link" icon={<CopyOutlined />} onClick={() => duplicateItem(record)} />
+            </Tooltip>
+          )}
+          {config.display?.allowDelete !== false && (
+            <Tooltip title="Delete">
+              <Button type="link" danger icon={<DeleteOutlined />} onClick={() => deleteItem(record.id)} />
+            </Tooltip>
+          )}
+        </Space>
+      ),
+    },
+  ];
+};
+
+const handleAddCondition = () => {
+  if (newCondition.field && newCondition.operator && newCondition.value !== undefined && newCondition.value !== '') {
+    addFilterCondition(newCondition as FilterCondition);
+    setNewCondition({ operator: 'equals' });
+    setShowAdvancedFilters(false);
+  }
+};
+
+const renderFilterValueInput = (field?: { name: string; label: string; type: string; options?: { value: string; label: string }[]; dependsOn?: string }) => {
+  if (!field || !newCondition.operator) {
+    return null;
+  }
+
+  if (newCondition.operator === 'between' && field.type === 'number') {
+    const currentValue = typeof newCondition.value === 'object' && newCondition.value && 'start' in newCondition.value
+      ? newCondition.value
+      : { start: undefined, end: undefined };
+
     return (
-      <div className="text-center py-8">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mx-auto"></div>
-        <p className="mt-2 text-gray-600">Loading...</p>
-      </div>
+      <Space style={{ width: '100%' }}>
+        <InputNumber
+          style={{ width: '45%' }}
+          value={currentValue.start as number | undefined}
+          onChange={(value) => setNewCondition({
+            ...newCondition,
+            value: { ...currentValue, start: value ?? undefined },
+          })}
+        />
+        <InputNumber
+          style={{ width: '45%' }}
+          value={currentValue.end as number | undefined}
+          onChange={(value) => setNewCondition({
+            ...newCondition,
+            value: { ...currentValue, end: value ?? undefined },
+          })}
+        />
+      </Space>
     );
   }
 
-  if (data.length === 0) {
-    return <div className="text-center py-8 text-gray-500">No data available</div>;
+  if (newCondition.operator === 'dateBetween' && field.type === 'date') {
+    const currentValue = typeof newCondition.value === 'object' && newCondition.value && 'start' in newCondition.value
+      ? newCondition.value
+      : { start: undefined, end: undefined };
+
+    return (
+      <DatePicker.RangePicker
+        style={{ width: '100%' }}
+        value={[
+          currentValue.start ? dayjs(currentValue.start as string) : null,
+          currentValue.end ? dayjs(currentValue.end as string) : null,
+        ] as any}
+        onChange={(_, dateStrings) =>
+          setNewCondition({
+            ...newCondition,
+            value: { start: dateStrings[0], end: dateStrings[1] },
+          })
+        }
+      />
+    );
+  }
+
+  if (field.type === 'date') {
+    return (
+      <DatePicker
+        style={{ width: '100%' }}
+        value={typeof newCondition.value === 'string' && newCondition.value ? dayjs(newCondition.value) : undefined}
+        onChange={(_, dateString) => setNewCondition({ ...newCondition, value: dateString })}
+      />
+    );
+  }
+
+  if (field.type === 'number') {
+    return (
+      <InputNumber
+        style={{ width: '100%' }}
+        value={typeof newCondition.value === 'number' ? newCondition.value : newCondition.value ? Number(newCondition.value) : undefined}
+        onChange={(value) => setNewCondition({ ...newCondition, value: value ?? '' })}
+      />
+    );
+  }
+
+  if (field.type === 'select' || field.type === 'boolean') {
+    const options = field.type === 'boolean'
+      ? [
+          { label: 'Yes', value: 'true' },
+          { label: 'No', value: 'false' },
+        ]
+      : getSelectOptions(field as FieldConfig);
+
+    if (newCondition.operator === 'in') {
+      return (
+        <Select
+          mode="multiple"
+          allowClear
+          style={{ width: '100%' }}
+          value={Array.isArray(newCondition.value) ? newCondition.value : []}
+          options={options}
+          onChange={(value) => setNewCondition({ ...newCondition, value })}
+        />
+      );
+    }
+
+    return (
+      <Select
+        allowClear
+        style={{ width: '100%' }}
+        value={typeof newCondition.value === 'string' ? newCondition.value : undefined}
+        options={options}
+        onChange={(value) => setNewCondition({ ...newCondition, value })}
+      />
+    );
   }
 
   return (
-    <div>
-      {tableConfig.parentTable && (
-        <div className="mb-4">
-          <label className="flex items-center">
-            <input
-              type="checkbox"
-              checked={showAll}
-              onChange={(e) => onToggleShowAll(e.target.checked)}
-              className="mr-2 h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-            />
-            <span className="text-sm text-gray-700">
-              Show all {tableConfig.name}s across all {tableConfig.parentTable}
-            </span>
-          </label>
-        </div>
-      )}
-      
-      <div className="overflow-x-auto shadow-sm border border-gray-200 rounded-lg">
-        <table className="min-w-full divide-y divide-gray-200">
-          <thead className="bg-gray-50">
-            <tr>
-              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Action
-              </th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                ID
-              </th>
-              {tableConfig.fields.map(field => (
-                <th key={field.name} className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  {field.label}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody className="bg-white divide-y divide-gray-200">
-            {data.map(item => (
-              <tr key={item.id} className="hover:bg-gray-50 transition-colors">
-                <td className="px-4 py-3 whitespace-nowrap">
-                  <button
-                    onClick={() => onSelect(item)}
-                    className="text-blue-600 hover:text-blue-800 text-sm font-medium"
-                  >
-                    Select
-                  </button>
-                </td>
-                <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
-                  {item.id}
-                </td>
-                {tableConfig.fields.map(field => (
-                  <td key={field.name} className="px-4 py-3 text-sm text-gray-900">
-                    {field.type === 'textarea' && item[field.name]?.length > 50
-                      ? item[field.name].substring(0, 50) + '...'
-                      : item[field.name]}
-                  </td>
-                ))}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </div>
+    <Input
+      value={typeof newCondition.value === 'string' ? newCondition.value : ''}
+      onChange={(e) => setNewCondition({ ...newCondition, value: e.target.value })}
+      placeholder="Enter value"
+    />
   );
 };
 
-// Dynamic Level Selector
-const DynamicLevelSelector: React.FC<{
-  tableName: string;
-  tableConfig: TableConfig;
-  formState: FormState;
-  onUpdate: (tableName: string, data: TableRecord | null) => void;
-  allTables: Record<string, TableConfig>;
-}> = ({ tableName, tableConfig, formState, onUpdate, allTables }) => {
-  const [loading, setLoading] = useState(false);
-  const [options, setOptions] = useState<TableRecord[]>([]);
-  const [showAddForm, setShowAddForm] = useState(false);
-  const [selectedValue, setSelectedValue] = useState('');
-  const [error, setError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'select' | 'browse'>('select');
-  const [showAllRecords, setShowAllRecords] = useState(false);
-
-  const parentTableName = tableConfig.parentTable;
-  const parentField = parentTableName ? `${parentTableName.slice(0, -1)}_id` : undefined;
-
-  useEffect(() => {
-    if (activeTab === 'select') {
-      loadOptions();
-    }
-  }, [formState, tableName]);
-
-  useEffect(() => {
-    if (formState[tableName]) {
-      setSelectedValue(formState[tableName]!.id.toString());
-    } else {
-      setSelectedValue('');
-    }
-  }, [formState, tableName]);
-
-  const loadOptions = async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const filters: Record<string, any> = {};
-      if (parentTableName && formState[parentTableName]) {
-        filters[parentField!] = formState[parentTableName]!.id;
-      }
-      
-      const data = await apiService.getTableData(tableName, filters);
-      setOptions(data);
-    } catch (error) {
-      console.error('Error loading options:', error);
-      setError('Failed to load options');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleSelect = (value: string) => {
-    if (value === 'add_new') {
-      setShowAddForm(true);
-    } else if (value) {
-      const selected = options.find(opt => opt.id === parseInt(value));
-      if (selected) {
-        onUpdate(tableName, selected);
-        setSelectedValue(value);
-      }
-    } else {
-      onUpdate(tableName, null);
-      setSelectedValue('');
-    }
-  };
-
-  const handleSaveNew = (newRecord: TableRecord) => {
-    setOptions(prev => [...prev, newRecord]);
-    onUpdate(tableName, newRecord);
-    setShowAddForm(false);
-    setSelectedValue(newRecord.id.toString());
-    setActiveTab('select');
-  };
-
-  const handleBrowseSelect = (record: TableRecord) => {
-    onUpdate(tableName, record);
-    setSelectedValue(record.id.toString());
-    setActiveTab('select');
-  };
+const renderAdvancedFilterContent = () => {
+  const selectedField = getFilterableFields().find(f => f.name === newCondition.field);
 
   return (
-    <div className="mb-6 p-4 border rounded-lg bg-gray-50">
-      <h3 className="text-lg font-semibold mb-3 text-gray-700">
-        {tableConfig.name} Selection
-        {parentTableName && !formState[parentTableName] && (
-          <span className="text-sm font-normal text-gray-500 ml-2">
-            (Select {allTables[parentTableName]?.name || parentTableName} first)
-          </span>
+    <div style={{ width: 360 }}>
+      <Space direction="vertical" size="large" style={{ width: '100%' }}>
+        <Space align="center" style={{ width: '100%', justifyContent: 'space-between' }}>
+          <Typography.Text strong>Advanced Filters</Typography.Text>
+          <Button type="text" size="small" icon={<CloseOutlined />} onClick={() => setShowAdvancedFilters(false)} />
+        </Space>
+
+        {activeFilters.length > 0 && (
+          <>
+            <Space direction="vertical" style={{ width: '100%' }} size="small">
+              <Typography.Text type="secondary">Active Filters</Typography.Text>
+              <Space size={[4, 4]} wrap>
+                {activeFilters.map((condition, index) => {
+                  const field = getFilterableFields().find(f => f.name === condition.field);
+                  const valueLabel = typeof condition.value === 'object' && condition.value && 'start' in condition.value
+                    ? `${condition.value.start || ''} - ${condition.value.end || ''}`
+                    : Array.isArray(condition.value)
+                      ? condition.value.join(', ')
+                      : String(condition.value);
+
+                  return (
+                    <Tag key={`${condition.field}-${index}`} closable onClose={() => removeFilterCondition(index)}>
+                      <strong>{field?.label}:</strong> {condition.operator} {valueLabel}
+                    </Tag>
+                  );
+                })}
+              </Space>
+            </Space>
+            <Divider style={{ margin: '8px 0' }} />
+          </>
         )}
-      </h3>
 
-      <div className="flex mb-4 border-b">
-        <button
-          onClick={() => setActiveTab('select')}
-          className={`px-4 py-2 font-medium text-sm transition-colors ${
-            activeTab === 'select' 
-              ? 'text-blue-600 border-b-2 border-blue-600' 
-              : 'text-gray-600 hover:text-gray-800'
-          }`}
-        >
-          Select/Add
-        </button>
-        <button
-          onClick={() => setActiveTab('browse')}
-          className={`px-4 py-2 font-medium text-sm transition-colors ${
-            activeTab === 'browse' 
-              ? 'text-blue-600 border-b-2 border-blue-600' 
-              : 'text-gray-600 hover:text-gray-800'
-          }`}
-        >
-          Browse Existing
-        </button>
-      </div>
-
-      {error && (
-        <div className="mb-3 p-2 bg-red-100 text-red-700 rounded">
-          {error}
-        </div>
-      )}
-
-      {activeTab === 'select' ? (
-        !showAddForm ? (
+        <Space direction="vertical" size="middle" style={{ width: '100%' }}>
           <div>
-            <label className="block text-sm font-medium text-gray-600 mb-2">
-              Select or Add {tableConfig.name}
-            </label>
-            <select
-              className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100"
-              value={selectedValue}
-              onChange={(e) => handleSelect(e.target.value)}
-              disabled={loading || (!!parentTableName && !formState[parentTableName])}
-            >
-              <option value="">-- Select {tableConfig.name} --</option>
-              {options.map(opt => (
-                <option key={opt.id} value={opt.id}>
-                  {opt[tableConfig.displayField] || `${tableConfig.name} #${opt.id}`}
-                </option>
-              ))}
-              <option value="add_new">+ Add New {tableConfig.name}</option>
-            </select>
-
-            {formState[tableName] && (
-              <div className="mt-3 p-3 bg-white rounded border">
-                <p className="text-sm text-gray-600 mb-1">Selected:</p>
-                <p className="font-medium text-gray-900">
-                  {formState[tableName]![tableConfig.displayField] || `ID: ${formState[tableName]!.id}`}
-                </p>
-                <div className="mt-2 space-y-1">
-                  {tableConfig.businessKeys.map(key => (
-                    <p key={key} className="text-sm text-gray-600">
-                      <span className="font-medium">{key}:</span> {formState[tableName]![key]}
-                    </p>
-                  ))}
-                </div>
-              </div>
-            )}
+            <Typography.Text>Field</Typography.Text>
+            <Select
+              style={{ width: '100%', marginTop: 4 }}
+              placeholder="Select field"
+              value={newCondition.field}
+              onChange={(value) => setNewCondition({ field: value, operator: 'equals', value: '' })}
+              options={getFilterableFields().map(field => ({ label: field.label, value: field.name }))}
+            />
           </div>
-        ) : (
-          <DynamicTableForm
-            tableConfig={tableConfig}
-            tableName={tableName}
-            parentId={formState[parentTableName!]?.id}
-            parentField={parentField}
-            onSave={handleSaveNew}
-            onCancel={() => setShowAddForm(false)}
-          />
-        )
-      ) : (
-        <DynamicDataBrowser
-          tableName={tableName}
-          tableConfig={tableConfig}
-          parentId={formState[parentTableName!]?.id}
-          parentField={parentField}
-          onSelect={handleBrowseSelect}
-          showAll={showAllRecords}
-          onToggleShowAll={setShowAllRecords}
-        />
-      )}
-    </div>
-  );
-};
 
-// Dynamic Data Entry Page
-const DynamicDataEntryPage: React.FC<{
-  pageConfig: PageConfig;
-}> = ({ pageConfig }) => {
-  const [formState, setFormState] = useState<FormState>({});
-  const [currentStep, setCurrentStep] = useState<number>(3); // Start from highest level
-  const [submitting, setSubmitting] = useState(false);
-  const [submitResponse, setSubmitResponse] = useState<SubmitResponse | null>(null);
-
-  const config = pageConfig.config;
-  
-  // Dynamically sort tables by level
-  const sortedTables = useMemo(() => {
-    return Object.entries(config.tables)
-      .sort(([, a], [, b]) => b.level - a.level)
-      .map(([name, tableConfig]) => ({
-        tableName: name,
-        ...tableConfig
-      }));
-  }, [config]);
-
-  // Dynamically determine the highest level
-  const maxLevel = useMemo(() => {
-    return Math.max(...Object.values(config.tables).map(t => t.level));
-  }, [config]);
-
-  // Initialize current step to max level
-  useEffect(() => {
-    setCurrentStep(maxLevel);
-  }, [maxLevel]);
-
-  const currentTable = useMemo(() => {
-    return sortedTables.find(t => t.level === currentStep);
-  }, [sortedTables, currentStep]);
-
-  const handleLevelUpdate = (tableName: string, data: TableRecord | null) => {
-    setFormState(prev => ({
-      ...prev,
-      [tableName]: data
-    }));
-
-    // Clear lower level selections when parent changes
-    const currentTableConfig = config.tables[tableName];
-    const lowerLevelTableNames = Object.entries(config.tables)
-      .filter(([_, t]) => t.level < currentTableConfig.level)
-      .map(([name]) => name);
-
-    if (lowerLevelTableNames.length > 0) {
-      setFormState(prev => {
-        const newState = { ...prev };
-        lowerLevelTableNames.forEach(name => delete newState[name]);
-        return newState;
-      });
-    }
-  };
-
-  const handleSaveAndNext = () => {
-    if (currentStep > 1) {
-      setCurrentStep(currentStep - 1);
-    }
-  };
-
-  const handleSubmit = async () => {
-    setSubmitting(true);
-    setSubmitResponse(null);
-    try {
-      const result = await apiService.submitFormData(
-        pageConfig.domain,
-        pageConfig.subdomain,
-        formState
-      );
-      
-      setSubmitResponse({
-        success: true,
-        message: 'Data submitted successfully!',
-        data: result
-      });
-
-      // Reset form after successful submission
-      setTimeout(() => {
-        setFormState({});
-        setCurrentStep(maxLevel);
-        setSubmitResponse(null);
-      }, 3000);
-    } catch (error: any) {
-      console.error('Error submitting:', error);
-      setSubmitResponse({
-        success: false,
-        message: error.response?.data?.message || 'Error submitting data. Please try again.'
-      });
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  const canProceed = currentTable && formState[currentTable.tableName] !== null;
-  const isLastStep = currentStep === 1;
-  const isFirstStep = currentStep === maxLevel;
-
-  return (
-    <div className="max-w-5xl mx-auto p-6">
-      <div className="bg-white rounded-lg shadow-lg p-6">
-        <h2 className="text-2xl font-bold mb-6 text-gray-800">
-          {config.name}
-        </h2>
-
-        {/* Progress Indicator */}
-        <div className="mb-8">
-          <div className="flex justify-between items-center">
-            {sortedTables.map((table, idx) => (
-              <div key={table.tableName} className="flex-1">
-                <div className="flex items-center">
-                  <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white font-semibold transition-colors
-                    ${table.level >= currentStep ? 'bg-blue-500' : 'bg-gray-300'}`}>
-                    {sortedTables.length - idx}
-                  </div>
-                  {idx < sortedTables.length - 1 && (
-                    <div className={`flex-1 h-1 mx-2 transition-colors
-                      ${table.level > currentStep ? 'bg-blue-500' : 'bg-gray-300'}`} />
-                  )}
-                </div>
-                <p className="text-sm mt-2 text-center">{table.name}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {submitResponse && (
-          <div className={`mb-6 p-4 rounded-lg ${
-            submitResponse.success ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
-          }`}>
-            {submitResponse.message}
-          </div>
-        )}
-
-        {/* Current Step Form */}
-        <div className="mb-6">
-          {sortedTables.map(table => (
-            <div key={table.tableName} className={table.level !== currentStep ? 'hidden' : ''}>
-              <DynamicLevelSelector
-                tableName={table.tableName}
-                tableConfig={table}
-                formState={formState}
-                onUpdate={handleLevelUpdate}
-                allTables={config.tables}
+          {newCondition.field && (
+            <div>
+              <Typography.Text>Operator</Typography.Text>
+              <Select
+                style={{ width: '100%', marginTop: 4 }}
+                value={newCondition.operator || 'equals'}
+                onChange={(value) => setNewCondition({ ...newCondition, operator: value as FilterCondition['operator'], value: '' })}
+                options={getFilterOperators(selectedField?.type || 'text').map(op => ({ label: op.label, value: op.value }))}
               />
             </div>
-          ))}
-        </div>
+          )}
 
-        {/* Action Buttons */}
-        <div className="flex justify-between">
-          <button
-            onClick={() => setCurrentStep(currentStep + 1)}
-            disabled={isFirstStep}
-            className="px-4 py-2 bg-gray-300 text-gray-700 rounded-md hover:bg-gray-400 disabled:opacity-50 disabled:cursor-not-allowed"
+          {newCondition.field && newCondition.operator && (
+            <div>
+              <Typography.Text>Value</Typography.Text>
+              <div style={{ marginTop: 4 }}>{renderFilterValueInput(selectedField)}</div>
+            </div>
+          )}
+
+          <Button
+            type="primary"
+            icon={<FilterOutlined />}
+            block
+            disabled={!newCondition.field || !newCondition.operator || newCondition.value === '' || newCondition.value === undefined}
+            onClick={handleAddCondition}
           >
-            Previous
-          </button>
+            Add Filter
+          </Button>
 
-          <div className="flex gap-3">
-            {!isLastStep && (
-              <button
-                onClick={handleSaveAndNext}
-                disabled={!canProceed}
-                className="px-4 py-2 bg-green-500 text-white rounded-md hover:bg-green-600 disabled:opacity-50 disabled:cursor-not-allowed"
+          {hasActiveFilters && (
+            <Button block onClick={clearFilters}>
+              Clear All Filters
+            </Button>
+          )}
+        </Space>
+      </Space>
+    </div>
+  );
+};
+
+const tabItems: TabsProps['items'] = tableConfigs.map((config) => {
+  const configFilters = filters[config.id] || [];
+  const isActive = config.id === activeTable;
+  const configHasActiveFilters = (isActive && Boolean(searchTerm)) || configFilters.length > 0;
+  const configFilteredItems = isActive ? filteredItems : (dataStore[config.id] || []);
+  const columns = buildColumns(config);
+
+  return {
+    key: config.id,
+    label: (
+      <Space size={8}>
+        {config.icon}
+        <span>{config.name}</span>
+        <Tag color="blue">{(dataStore[config.id] || []).length}</Tag>
+      </Space>
+    ),
+    children: (
+      <Space direction="vertical" size="large" style={{ width: '100%' }}>
+        <Row gutter={[16, 16]} justify="space-between" align="middle">
+          <Col xs={24} md={16}>
+            <Space wrap>
+              <Input
+                allowClear
+                style={{ width: 260 }}
+                placeholder={`Search ${config.name.toLowerCase()}...`}
+                prefix={<SearchOutlined />}
+                value={isActive ? searchTerm : ''}
+                onChange={(e) => isActive && setSearchTerm(e.target.value)}
+              />
+              <Popover
+                trigger="click"
+                open={isActive ? showAdvancedFilters : false}
+                onOpenChange={(open) => isActive && setShowAdvancedFilters(open)}
+                content={renderAdvancedFilterContent()}
               >
-                Save & Next
-              </button>
-            )}
+                <Button type={configHasActiveFilters ? 'primary' : 'default'} icon={<FilterOutlined />}>
+                  Filters
+                  {configFilters.length > 0 && <Tag color="blue" style={{ marginLeft: 8 }}>{configFilters.length}</Tag>}
+                </Button>
+              </Popover>
+              {isActive && hasActiveFilters && (
+                <Button icon={<CloseOutlined />} onClick={clearFilters}>
+                  Clear
+                </Button>
+              )}
+            </Space>
+          </Col>
+          <Col xs={24} md="auto">
+            <Space size={8} wrap>
+              {config.dependencies.length > 0 && (
+                <Space size={4} wrap>
+                  <Typography.Text type="secondary">Depends on:</Typography.Text>
+                  {config.dependencies.map(dep => (
+                    <Tag key={dep}>{tableConfigs.find(t => t.id === dep)?.name}</Tag>
+                  ))}
+                </Space>
+              )}
+              <Button
+                type="primary"
+                icon={<PlusOutlined />}
+                onClick={() => createNewItem(config.id)}
+                disabled={config.dependencies.some(dep => !(dataStore[dep] && dataStore[dep].length > 0))}
+              >
+                Add {config.name.slice(0, -1)}
+              </Button>
+            </Space>
+          </Col>
+        </Row>
 
-            <button
-              onClick={handleSubmit}
-              disabled={!canProceed || submitting}
-              className="px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {submitting ? 'Submitting...' : 'Submit All'}
-            </button>
-          </div>
-        </div>
+        {isActive && hasActiveFilters && (
+          <Space direction="vertical" size="small" style={{ width: '100%' }}>
+            <Typography.Text>Active filters:</Typography.Text>
+            <Space size={[4, 4]} wrap>
+              {searchTerm && (
+                <Tag
+                  closable
+                  onClose={() => setSearchTerm('')}
+                  icon={<SearchOutlined />}
+                >
+                  {searchTerm}
+                </Tag>
+              )}
+              {activeFilters.map((condition, index) => {
+                const field = getFilterableFields().find(f => f.name === condition.field);
+                const valueLabel = typeof condition.value === 'object' && condition.value && 'start' in condition.value
+                  ? `${condition.value.start || ''}-${condition.value.end || ''}`
+                  : Array.isArray(condition.value)
+                    ? condition.value.join(', ')
+                    : String(condition.value);
 
-        {/* Debug Info */}
-        <details className="mt-8">
-          <summary className="cursor-pointer text-sm text-gray-600 hover:text-gray-800">
-            View Form State (Debug)
-          </summary>
-          <pre className="mt-2 p-3 bg-gray-100 rounded text-xs overflow-auto">
-            {JSON.stringify(formState, null, 2)}
-          </pre>
-        </details>
-      </div>
-    </div>
-  );
-};
+                return (
+                  <Tag key={`${condition.field}-${index}`} closable onClose={() => removeFilterCondition(index)}>
+                    <strong>{field?.label}:</strong> {condition.operator} {valueLabel}
+                  </Tag>
+                );
+              })}
+            </Space>
+          </Space>
+        )}
 
-// Main Dynamic App Component
-const DynamicApp: React.FC = () => {
-  const [pageConfig, setPageConfig] = useState<PageConfig | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  
-  // These would come from URL params or props in a real app
-  const domain = 'inventory';
-  const subdomain = 'product_entry';
+        {config.dependencies.some(dep => !(dataStore[dep] && dataStore[dep].length > 0)) && (
+          <Alert
+            type="warning"
+            message="Dependencies required"
+            description={`Create ${config.dependencies
+              .filter(dep => !(dataStore[dep] && dataStore[dep].length > 0))
+              .map(dep => tableConfigs.find(t => t.id === dep)?.name)
+              .join(', ')} before adding ${config.name.toLowerCase()}.`}
+            showIcon
+          />
+        )}
 
-  useEffect(() => {
-    loadPageConfiguration();
-  }, [domain, subdomain]);
-
-  const loadPageConfiguration = async () => {
-    try {
-      setLoading(true);
-      setError(null);
-      const config = await apiService.getPageConfig(domain, subdomain);
-      setPageConfig(config);
-    } catch (error: any) {
-      console.error('Error loading page configuration:', error);
-      setError(error.response?.data?.message || 'Failed to load page configuration');
-    } finally {
-      setLoading(false);
-    }
+          <Table
+            columns={columns}
+            dataSource={configFilteredItems.map(item => ({ ...item, key: item.id }))}
+            pagination={{ pageSize: config.display?.pageSize || 10 }}
+          locale={{
+            emptyText: (
+              <Space direction="vertical" align="center">
+                {React.cloneElement(config.icon, { size: 32, color: '#999' })}
+                <Typography.Text type="secondary">No {config.name.toLowerCase()} found.</Typography.Text>
+              </Space>
+            ),
+          }}
+          scroll={{ x: true }}
+        />
+      </Space>
+    ),
   };
+});
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-gray-100 flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto"></div>
-          <p className="mt-4 text-gray-600">Loading configuration...</p>
-        </div>
-      </div>
-    );
-  }
+return (
+  <div style={{ maxWidth: 1200, margin: '0 auto', padding: 24 }}>
+    <Space direction="vertical" size="large" style={{ width: '100%' }}>
+      <Space align="center" style={{ width: '100%', justifyContent: 'space-between' }}>
+        <Space direction="vertical" size={0}>
+          <Space size={8}>
+            <DatabaseOutlined style={{ fontSize: 24 }} />
+            <Typography.Title level={3} style={{ margin: 0 }}>
+              Enhanced Data Entry System
+            </Typography.Title>
+          </Space>
+          <Typography.Text type="secondary">
+            Manage relational data with business keys, editing, and flexible relationships
+          </Typography.Text>
+        </Space>
+        <Button
+          icon={<ExportOutlined />}
+          onClick={() => {
+            console.log('Full Dataset:', dataStore);
+            toast.success('Data exported to console');
+          }}
+        >
+          Export Data
+        </Button>
+      </Space>
 
-  if (error) {
-    return (
-      <div className="min-h-screen bg-gray-100 flex items-center justify-center">
-        <div className="bg-white p-8 rounded-lg shadow-lg max-w-md">
-          <p className="text-red-600 mb-4">{error}</p>
-          <button
-            onClick={loadPageConfiguration}
-            className="w-full px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600"
-          >
-            Retry
-          </button>
-        </div>
-      </div>
-    );
-  }
+      <Tabs
+        activeKey={activeTable}
+        onChange={setActiveTable}
+        items={tabItems}
+        destroyInactiveTabPane
+      />
+    </Space>
 
-  if (!pageConfig) {
-    return (
-      <div className="min-h-screen bg-gray-100 flex items-center justify-center">
-        <div className="bg-white p-8 rounded-lg shadow-lg">
-          <p className="text-gray-600">No configuration found for {domain}/{subdomain}</p>
-        </div>
-      </div>
-    );
-  }
+    <Modal
+      open={showEditDialog}
+      title={`${editingItem && (dataStore[activeTable] || []).some((item: BaseEntity) => item.id === editingItem.id) ? 'Edit' : 'Create'} ${currentConfig.name.slice(0, -1)}`}
+      onCancel={() => setShowEditDialog(false)}
+      onOk={saveItem}
+      okText="Save"
+      cancelText="Cancel"
+      width={720}
+      destroyOnClose
+    >
+      {editingItem && (
+        <Form layout="vertical">
+          <Form.Item label="Business Key">
+            <Input
+              value={editingItem.businessKey}
+              onChange={(e) => setEditingItem({ ...editingItem, businessKey: e.target.value })}
+              disabled={(dataStore[activeTable] || []).some((item: BaseEntity) => item.id === editingItem.id)}
+              placeholder={`${currentConfig.businessKeyPrefix}-XXXX`}
+            />
+          </Form.Item>
 
-  return (
-    <div className="min-h-screen bg-gray-100">
-      <header className="bg-white shadow-sm border-b">
-        <div className="max-w-7xl mx-auto px-4 py-4">
-          <h1 className="text-3xl font-bold text-gray-900">
-            Dynamic 3NF Data Entry System
-          </h1>
-          <p className="text-gray-600 mt-1">
-            {pageConfig.config.name} - {domain}/{subdomain}
-          </p>
-        </div>
-      </header>
+          <Row gutter={16}>
+            {currentConfig.fields.map((field) => (
+              <Col key={field.name} span={field.type === 'textarea' ? 24 : 12}>
+                <Form.Item
+                  label={
+                    <span>
+                      {field.label}
+                      {field.required && <span style={{ color: '#ff4d4f' }}> *</span>}
+                    </span>
+                  }
+                >
+                  {(() => {
+                    if (!editingItem) return null;
+                    const value = editingItem[field.name];
 
-      <main className="py-8">
-        <DynamicDataEntryPage pageConfig={pageConfig} />
-      </main>
-    </div>
+                      if (field.type === 'select') {
+                        const options = getSelectOptions(field, editingItem.companyId);
+                        const selectOptions = field.name === 'departmentId'
+                          ? [{ label: 'No Department', value: '' }, ...options]
+                          : options;
+                        const selectedValue = field.name === 'departmentId'
+                          ? (value ?? '')
+                          : (value ?? undefined);
+
+                        return (
+                          <Select
+                            allowClear={!field.required}
+                            options={selectOptions}
+                            value={selectedValue}
+                            onChange={(val) => {
+                              const finalValue = field.name === 'departmentId' ? (val ?? '') : val;
+                              setEditingItem({ ...editingItem, [field.name]: finalValue });
+                            }}
+                            placeholder={field.placeholder}
+                          />
+                        );
+                      }
+
+                    if (field.type === 'multiselect') {
+                      return (
+                        <Select
+                          mode="multiple"
+                          allowClear
+                          options={getSelectOptions(field, editingItem.companyId)}
+                          value={Array.isArray(value) ? value : []}
+                          onChange={(vals) => setEditingItem({ ...editingItem, [field.name]: vals })}
+                          placeholder={field.placeholder}
+                        />
+                      );
+                    }
+
+                    if (field.type === 'boolean') {
+                      return (
+                        <Switch
+                          checked={Boolean(value)}
+                          onChange={(checked) => setEditingItem({ ...editingItem, [field.name]: checked })}
+                        />
+                      );
+                    }
+
+                    if (field.type === 'textarea') {
+                      return (
+                        <Input.TextArea
+                          rows={3}
+                          value={value || ''}
+                          onChange={(e) => setEditingItem({ ...editingItem, [field.name]: e.target.value })}
+                          placeholder={field.placeholder}
+                        />
+                      );
+                    }
+
+                    if (field.type === 'number') {
+                      return (
+                        <InputNumber
+                          style={{ width: '100%' }}
+                          value={typeof value === 'number' ? value : value ? Number(value) : 0}
+                          onChange={(val) => setEditingItem({ ...editingItem, [field.name]: val ?? 0 })}
+                          placeholder={field.placeholder}
+                        />
+                      );
+                    }
+
+                    if (field.type === 'date') {
+                      return (
+                        <DatePicker
+                          style={{ width: '100%' }}
+                          value={value ? dayjs(value) : undefined}
+                          onChange={(_, dateString) => setEditingItem({ ...editingItem, [field.name]: dateString })}
+                        />
+                      );
+                    }
+
+                    return (
+                      <Input
+                        type={field.type === 'phone' ? 'tel' : field.type === 'url' ? 'url' : field.type === 'email' ? 'email' : 'text'}
+                        value={value || ''}
+                        onChange={(e) => setEditingItem({ ...editingItem, [field.name]: e.target.value })}
+                        placeholder={field.placeholder}
+                      />
+                    );
+                  })()}
+                </Form.Item>
+              </Col>
+            ))}
+          </Row>
+        </Form>
+      )}
+    </Modal>
+  </div>
   );
-};
-
-export default DynamicApp;
-
-
-# simple_dynamic_api.py - Simplified Dynamic Backend that works with the frontend
-
-from fastapi import FastAPI, HTTPException, Depends, Request
-from fastapi.middleware.cors import CORSMiddleware
-from sqlalchemy import create_engine, Column, Integer, String, Text, Float, ForeignKey, UniqueConstraint
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker, Session
-from typing import List, Optional, Dict, Any
-from pydantic import BaseModel
-from datetime import datetime
-import json
-
-# Database setup
-SQLALCHEMY_DATABASE_URL = "sqlite:///./dynamic_3nf.db"
-engine = create_engine(SQLALCHEMY_DATABASE_URL, connect_args={"check_same_thread": False})
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-Base = declarative_base()
-
-# FastAPI app
-app = FastAPI(title="Dynamic 3NF API", version="2.0.0")
-
-# CORS middleware
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-# SQLAlchemy Models (keeping it simple for now)
-class Department(Base):
-    __tablename__ = "departments"
-    
-    id = Column(Integer, primary_key=True, index=True)
-    dept_code = Column(String(50), nullable=False, unique=True)
-    dept_name = Column(String(100), nullable=False)
-    description = Column(Text)
-    created_at = Column(String(50), default=lambda: datetime.utcnow().isoformat())
-
-class Category(Base):
-    __tablename__ = "categories"
-    
-    id = Column(Integer, primary_key=True, index=True)
-    department_id = Column(Integer, ForeignKey("departments.id"), nullable=False)
-    category_code = Column(String(50), nullable=False)
-    category_name = Column(String(100), nullable=False)
-    description = Column(Text)
-    created_at = Column(String(50), default=lambda: datetime.utcnow().isoformat())
-    
-    __table_args__ = (
-        UniqueConstraint('category_code', 'department_id', name='uix_category_dept'),
-    )
-
-class Product(Base):
-    __tablename__ = "products"
-    
-    id = Column(Integer, primary_key=True, index=True)
-    category_id = Column(Integer, ForeignKey("categories.id"), nullable=False)
-    product_code = Column(String(50), nullable=False)
-    sku = Column(String(50), nullable=False)
-    product_name = Column(String(200), nullable=False)
-    price = Column(Float, nullable=False)
-    quantity = Column(Integer, nullable=False)
-    description = Column(Text)
-    created_at = Column(String(50), default=lambda: datetime.utcnow().isoformat())
-    
-    __table_args__ = (
-        UniqueConstraint('product_code', 'sku', 'category_id', name='uix_product_category'),
-    )
-
-# Create tables
-Base.metadata.create_all(bind=engine)
-
-# Dependency to get DB session
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
-
-# Table registry
-TABLE_MODELS = {
-    "departments": Department,
-    "categories": Category,
-    "products": Product
 }
 
-# Configuration
-CONFIGURATION = {
-    "inventory": {
-        "product_entry": {
-            "name": "Product Entry",
-            "mainTable": "products",
-            "tables": {
-                "departments": {
-                    "name": "Department",
-                    "level": 3,
-                    "businessKeys": ["dept_code"],
-                    "fields": [
-                        {"name": "dept_code", "label": "Department Code", "type": "text", "required": True},
-                        {"name": "dept_name", "label": "Department Name", "type": "text", "required": True},
-                        {"name": "description", "label": "Description", "type": "textarea", "required": False}
-                    ],
-                    "displayField": "dept_name"
-                },
-                "categories": {
-                    "name": "Category",
-                    "level": 2,
-                    "parentTable": "departments",
-                    "businessKeys": ["category_code"],
-                    "fields": [
-                        {"name": "category_code", "label": "Category Code", "type": "text", "required": True},
-                        {"name": "category_name", "label": "Category Name", "type": "text", "required": True},
-                        {"name": "description", "label": "Description", "type": "textarea", "required": False}
-                    ],
-                    "displayField": "category_name"
-                },
-                "products": {
-                    "name": "Product",
-                    "level": 1,
-                    "parentTable": "categories",
-                    "businessKeys": ["product_code", "sku"],
-                    "fields": [
-                        {"name": "product_code", "label": "Product Code", "type": "text", "required": True},
-                        {"name": "sku", "label": "SKU", "type": "text", "required": True},
-                        {"name": "product_name", "label": "Product Name", "type": "text", "required": True},
-                        {"name": "price", "label": "Price", "type": "number", "required": True},
-                        {"name": "quantity", "label": "Quantity", "type": "number", "required": True},
-                        {"name": "description", "label": "Description", "type": "textarea", "required": False}
-                    ],
-                    "displayField": "product_name"
-                }
-            }
-        }
-    }
+// Export default props for easy usage
+export default function DataEntrySystemWithDefaults() {
+  return <EnhancedDataEntrySystem />;
 }
-
-# API Endpoints
-
-@app.get("/api/config/{domain}/{subdomain}")
-def get_page_configuration(domain: str, subdomain: str):
-    """Get configuration for a specific domain and subdomain"""
-    if domain not in CONFIGURATION:
-        raise HTTPException(status_code=404, detail=f"Domain '{domain}' not found")
-    
-    if subdomain not in CONFIGURATION[domain]:
-        raise HTTPException(status_code=404, detail=f"Subdomain '{subdomain}' not found")
-    
-    return {
-        "domain": domain,
-        "subdomain": subdomain,
-        "config": CONFIGURATION[domain][subdomain]
-    }
-
-@app.get("/api/tables/{table_name}")
-async def get_table_data(
-    table_name: str,
-    request: Request,
-    db: Session = Depends(get_db)
-):
-    """Get data from any table with optional filters"""
-    if table_name not in TABLE_MODELS:
-        raise HTTPException(status_code=404, detail=f"Table '{table_name}' not found")
-    
-    model = TABLE_MODELS[table_name]
-    query = db.query(model)
-    
-    # Get query parameters
-    params = dict(request.query_params)
-    
-    # Handle parent_id filter
-    if 'parent_id' in params:
-        parent_id = int(params['parent_id'])
-        # Determine the parent field based on table
-        if table_name == "categories":
-            query = query.filter(model.department_id == parent_id)
-        elif table_name == "products":
-            query = query.filter(model.category_id == parent_id)
-    
-    # Handle other specific filters
-    if 'department_id' in params and hasattr(model, 'department_id'):
-        query = query.filter(model.department_id == int(params['department_id']))
-    
-    if 'category_id' in params and hasattr(model, 'category_id'):
-        query = query.filter(model.category_id == int(params['category_id']))
-    
-    # Get all records
-    records = query.all()
-    
-    # Convert to dict format
-    result = []
-    for record in records:
-        record_dict = {}
-        for column in model.__table__.columns:
-            record_dict[column.name] = getattr(record, column.name)
-        result.append(record_dict)
-    
-    return result
-
-@app.post("/api/tables/{table_name}")
-def create_table_record(
-    table_name: str,
-    record_data: Dict[str, Any],
-    db: Session = Depends(get_db)
-):
-    """Create a record in any table"""
-    if table_name not in TABLE_MODELS:
-        raise HTTPException(status_code=404, detail=f"Table '{table_name}' not found")
-    
-    model = TABLE_MODELS[table_name]
-    
-    try:
-        # Create the record
-        db_record = model(**record_data)
-        db.add(db_record)
-        db.commit()
-        db.refresh(db_record)
-        
-        # Convert to dict
-        result = {}
-        for column in model.__table__.columns:
-            result[column.name] = getattr(db_record, column.name)
-        
-        return result
-    except Exception as e:
-        db.rollback()
-        raise HTTPException(status_code=400, detail=str(e))
-
-@app.put("/api/tables/{table_name}/{record_id}")
-def update_table_record(
-    table_name: str,
-    record_id: int,
-    record_data: Dict[str, Any],
-    db: Session = Depends(get_db)
-):
-    """Update a record in any table"""
-    if table_name not in TABLE_MODELS:
-        raise HTTPException(status_code=404, detail=f"Table '{table_name}' not found")
-    
-    model = TABLE_MODELS[table_name]
-    db_record = db.query(model).filter(model.id == record_id).first()
-    
-    if not db_record:
-        raise HTTPException(status_code=404, detail="Record not found")
-    
-    try:
-        for field, value in record_data.items():
-            if hasattr(db_record, field) and field not in ['id', 'created_at']:
-                setattr(db_record, field, value)
-        
-        db.commit()
-        db.refresh(db_record)
-        
-        # Convert to dict
-        result = {}
-        for column in model.__table__.columns:
-            result[column.name] = getattr(db_record, column.name)
-        
-        return result
-    except Exception as e:
-        db.rollback()
-        raise HTTPException(status_code=400, detail=str(e))
-
-@app.delete("/api/tables/{table_name}/{record_id}")
-def delete_table_record(
-    table_name: str,
-    record_id: int,
-    db: Session = Depends(get_db)
-):
-    """Delete a record from any table"""
-    if table_name not in TABLE_MODELS:
-        raise HTTPException(status_code=404, detail=f"Table '{table_name}' not found")
-    
-    model = TABLE_MODELS[table_name]
-    db_record = db.query(model).filter(model.id == record_id).first()
-    
-    if not db_record:
-        raise HTTPException(status_code=404, detail="Record not found")
-    
-    try:
-        db.delete(db_record)
-        db.commit()
-        return {"message": "Record deleted successfully"}
-    except Exception as e:
-        db.rollback()
-        raise HTTPException(status_code=400, detail=str(e))
-
-@app.post("/api/submit/{domain}/{subdomain}")
-def submit_form_data(
-    domain: str,
-    subdomain: str,
-    form_data: Dict[str, Any],
-    db: Session = Depends(get_db)
-):
-    """Submit complete form data for a domain/subdomain"""
-    return {
-        "success": True,
-        "message": "Data submitted successfully",
-        "domain": domain,
-        "subdomain": subdomain,
-        "timestamp": datetime.utcnow().isoformat(),
-        "data": form_data
-    }
-
-@app.post("/api/init-sample-data")
-def init_sample_data(db: Session = Depends(get_db)):
-    """Initialize sample data"""
-    try:
-        # Check if data already exists
-        if db.query(Department).count() > 0:
-            return {"message": "Data already exists"}
-        
-        # Create sample departments
-        dept1 = Department(dept_code="ELEC", dept_name="Electronics", description="Electronic items")
-        dept2 = Department(dept_code="CLTH", dept_name="Clothing", description="Apparel and accessories")
-        db.add_all([dept1, dept2])
-        db.commit()
-        
-        # Create sample categories
-        cat1 = Category(
-            department_id=dept1.id,
-            category_code="COMP",
-            category_name="Computers",
-            description="Desktop and laptops"
-        )
-        cat2 = Category(
-            department_id=dept1.id,
-            category_code="PHON",
-            category_name="Phones",
-            description="Mobile devices"
-        )
-        cat3 = Category(
-            department_id=dept2.id,
-            category_code="MENS",
-            category_name="Men's Wear",
-            description="Men's clothing"
-        )
-        db.add_all([cat1, cat2, cat3])
-        db.commit()
-        
-        # Create sample products
-        prod1 = Product(
-            category_id=cat1.id,
-            product_code="LAP001",
-            sku="SKU-LAP-001",
-            product_name="Laptop Pro",
-            price=999.99,
-            quantity=10,
-            description="High-performance laptop"
-        )
-        prod2 = Product(
-            category_id=cat2.id,
-            product_code="PHN001",
-            sku="SKU-PHN-001",
-            product_name="SmartPhone X",
-            price=699.99,
-            quantity=25,
-            description="Latest smartphone"
-        )
-        db.add_all([prod1, prod2])
-        db.commit()
-        
-        return {"message": "Sample data initialized successfully"}
-    except Exception as e:
-        db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.get("/health")
-def health_check():
-    """Health check endpoint"""
-    return {"status": "healthy", "timestamp": datetime.utcnow().isoformat()}
-
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
