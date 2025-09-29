@@ -1,22 +1,1302 @@
-import React from "react";
-import { useTheme } from "next-themes";
-import { Toaster as Sonner, type ToasterProps } from "sonner";
+import React, { useState } from 'react';
+import { Layout, Card, Row, Col, Typography, Breadcrumb, Button, Tag, Badge, Space, Statistic } from 'antd';
+import {
+  ArrowLeftOutlined,
+  BankOutlined,
+  TeamOutlined,
+  ProjectOutlined,
+  UserSwitchOutlined,
+  SettingOutlined,
+  DatabaseOutlined,
+  BarChartOutlined,
+  LineChartOutlined,
+  ApartmentOutlined,
+  UserOutlined,
+  GlobalOutlined,
+  CalendarOutlined,
+  CheckSquareOutlined,
+  FundProjectionScreenOutlined,
+  ContactsOutlined,
+  TableOutlined,
+  ExportOutlined,
+  DashboardOutlined,
+  FundOutlined
+} from '@ant-design/icons';
+import { Domain, Subdomain, Page, NavigationState, appConfig, TableConfig, defaultInitialData } from '../config/app-config';
+import { EnhancedDataEntrySystem } from './EnhancedDataEntrySystem';
 
-type Props = ToasterProps;
+const { Content } = Layout;
+const { Title, Paragraph, Text } = Typography;
 
-const Toaster: React.FC<Props> = ({ ...props }) => {
-  const { theme = "system" } = useTheme();
+// Icon mapping for Ant Design icons
+const iconMap: { [key: string]: React.ReactNode } = {
+  BankOutlined: <BankOutlined />,
+  TeamOutlined: <TeamOutlined />,
+  ProjectOutlined: <ProjectOutlined />,
+  UserSwitchOutlined: <UserSwitchOutlined />,
+  SettingOutlined: <SettingOutlined />,
+  DatabaseOutlined: <DatabaseOutlined />,
+  BarChartOutlined: <BarChartOutlined />,
+  LineChartOutlined: <LineChartOutlined />,
+  ApartmentOutlined: <ApartmentOutlined />,
+  UserOutlined: <UserOutlined />,
+  GlobalOutlined: <GlobalOutlined />,
+  CalendarOutlined: <CalendarOutlined />,
+  CheckSquareOutlined: <CheckSquareOutlined />,
+  FundProjectionScreenOutlined: <FundProjectionScreenOutlined />,
+  ContactsOutlined: <ContactsOutlined />,
+  TableOutlined: <TableOutlined />,
+  ExportOutlined: <ExportOutlined />,
+  DashboardOutlined: <DashboardOutlined />,
+  FundOutlined: <FundOutlined />
+};
 
+export function NavigationShell() {
+  const [navigationState, setNavigationState] = useState<NavigationState>({});
+  const [currentPage, setCurrentPage] = useState<Page | null>(null);
+
+  const getIcon = (iconName?: string) => {
+    if (!iconName) return null;
+    return iconMap[iconName] || null;
+  };
+
+  const handleDomainSelect = (domain: Domain) => {
+    setNavigationState({ selectedDomain: domain });
+    setCurrentPage(null);
+  };
+
+  const handleSubdomainSelect = (subdomain: Subdomain) => {
+    setNavigationState(prev => ({ ...prev, selectedSubdomain: subdomain }));
+    setCurrentPage(null);
+  };
+
+  const handlePageSelect = (page: Page) => {
+    const newState = { ...navigationState, selectedPage: page };
+    setNavigationState(newState);
+    setCurrentPage(page);
+  };
+
+  const handleBack = () => {
+    if (currentPage) {
+      setCurrentPage(null);
+      setNavigationState(prev => ({ ...prev, selectedPage: undefined }));
+    } else if (navigationState.selectedSubdomain) {
+      setNavigationState(prev => ({
+        selectedDomain: prev.selectedDomain,
+        selectedSubdomain: undefined,
+        selectedPage: undefined
+      }));
+    } else if (navigationState.selectedDomain) {
+      setNavigationState({});
+    }
+  };
+
+  const renderBreadcrumb = () => {
+    const items = [
+      {
+        title: <a onClick={() => setNavigationState({})}>Home</a>
+      }
+    ];
+
+    if (navigationState.selectedDomain) {
+      items.push({
+        title: navigationState.selectedSubdomain ?
+          <a onClick={() => setNavigationState({ selectedDomain: navigationState.selectedDomain })}>
+            <Space>
+              {getIcon(navigationState.selectedDomain.icon)}
+              {navigationState.selectedDomain.name}
+            </Space>
+          </a> :
+          <Space>
+            {getIcon(navigationState.selectedDomain.icon)}
+            {navigationState.selectedDomain.name}
+          </Space>
+      });
+    }
+
+    if (navigationState.selectedSubdomain) {
+      items.push({
+        title: currentPage ?
+          <a onClick={() => { setCurrentPage(null); setNavigationState(prev => ({ ...prev, selectedPage: undefined })); }}>
+            <Space>
+              {getIcon(navigationState.selectedSubdomain.icon)}
+              {navigationState.selectedSubdomain.name}
+            </Space>
+          </a> :
+          <Space>
+            {getIcon(navigationState.selectedSubdomain.icon)}
+            {navigationState.selectedSubdomain.name}
+          </Space>
+      });
+    }
+
+    if (currentPage) {
+      items.push({
+        title: <Space>
+          {getIcon(currentPage.icon)}
+          {currentPage.name}
+        </Space>
+      });
+    }
+
+    return items.length > 1 ? <Breadcrumb items={items} className="mb-6" /> : null;
+  };
+
+  // Render page content
+  if (currentPage) {
+    if (currentPage.component === 'EnhancedDataEntrySystem' && currentPage.tableConfigs) {
+      const tableConfigs = currentPage.tableConfigs;
+
+      return (
+        <Layout className="min-h-screen bg-gray-50">
+          <Content className="p-6">
+            {renderBreadcrumb()}
+            <Button
+              icon={<ArrowLeftOutlined />}
+              onClick={handleBack}
+              className="mb-4"
+            >
+              Back
+            </Button>
+            <EnhancedDataEntrySystem
+              tableConfigs={tableConfigs}
+              initialData={defaultInitialData}
+            />
+          </Content>
+        </Layout>
+      );
+    }
+
+    // Placeholder for other components
+    return (
+      <Layout className="min-h-screen bg-gray-50">
+        <Content className="p-6">
+          {renderBreadcrumb()}
+          <Button
+            icon={<ArrowLeftOutlined />}
+            onClick={handleBack}
+            className="mb-4"
+          >
+            Back
+          </Button>
+          <Card>
+            <Title level={3}>{currentPage.name}</Title>
+            <Paragraph>{currentPage.description}</Paragraph>
+            <Tag color={currentPage.type === 'transactional' ? 'green' : 'blue'}>
+              {currentPage.type}
+            </Tag>
+            <Paragraph className="mt-4">
+              Component: {currentPage.component} (Coming soon)
+            </Paragraph>
+          </Card>
+        </Content>
+      </Layout>
+    );
+  }
+
+  // Show domains
+  if (!navigationState.selectedDomain) {
+    return (
+      <Layout className="min-h-screen bg-gray-50">
+        <Content className="p-6">
+          <div className="mb-8">
+            <Title level={2}>Business Application Suite</Title>
+            <Paragraph className="text-gray-600">
+              Select a domain to access related business functions and data management tools.
+            </Paragraph>
+          </div>
+
+          <Row gutter={[24, 24]}>
+            {appConfig.domains.map((domain) => {
+              const totalPages = domain.subdomains.reduce((total, sub) => total + sub.pages.length, 0);
+              const transactionalPages = domain.subdomains.reduce(
+                (total, sub) => total + sub.pages.filter(p => p.type === 'transactional').length, 0
+              );
+              const referencePages = totalPages - transactionalPages;
+
+              return (
+                <Col xs={24} sm={12} lg={8} key={domain.id}>
+                  <Card
+                    hoverable
+                    onClick={() => handleDomainSelect(domain)}
+                    className="h-full transition-all hover:shadow-lg"
+                    style={{ borderTop: `3px solid ${domain.color || '#1890ff'}` }}
+                  >
+                    <Space direction="vertical" className="w-full">
+                      <Space>
+                        <span style={{ fontSize: 24, color: domain.color || '#1890ff' }}>
+                          {getIcon(domain.icon)}
+                        </span>
+                        <Title level={4} className="mb-0">{domain.name}</Title>
+                      </Space>
+
+                      <Paragraph className="text-gray-600 mb-4">
+                        {domain.description}
+                      </Paragraph>
+
+                      <Row gutter={16}>
+                        <Col span={8}>
+                          <Statistic
+                            title="Subdomains"
+                            value={domain.subdomains.length}
+                            valueStyle={{ fontSize: 20 }}
+                          />
+                        </Col>
+                        <Col span={8}>
+                          <Statistic
+                            title="Pages"
+                            value={totalPages}
+                            valueStyle={{ fontSize: 20 }}
+                          />
+                        </Col>
+                        <Col span={8}>
+                          <Space direction="vertical" size={0}>
+                            <Text type="secondary" style={{ fontSize: 12 }}>Types</Text>
+                            <Space size={4}>
+                              <Badge count={transactionalPages} style={{ backgroundColor: '#52c41a' }} />
+                              <Badge count={referencePages} style={{ backgroundColor: '#1890ff' }} />
+                            </Space>
+                          </Space>
+                        </Col>
+                      </Row>
+                    </Space>
+                  </Card>
+                </Col>
+              );
+            })}
+          </Row>
+        </Content>
+      </Layout>
+    );
+  }
+
+  // Show subdomains
+  if (!navigationState.selectedSubdomain) {
+    return (
+      <Layout className="min-h-screen bg-gray-50">
+        <Content className="p-6">
+          {renderBreadcrumb()}
+
+          <Button
+            icon={<ArrowLeftOutlined />}
+            onClick={handleBack}
+            className="mb-6"
+          >
+            Back to Domains
+          </Button>
+
+          <div className="mb-6">
+            <Space>
+              <span style={{ fontSize: 28, color: navigationState.selectedDomain.color || '#1890ff' }}>
+                {getIcon(navigationState.selectedDomain.icon)}
+              </span>
+              <Title level={2} className="mb-0">{navigationState.selectedDomain.name}</Title>
+            </Space>
+            {navigationState.selectedDomain.description && (
+              <Paragraph className="text-gray-600 mt-2">
+                {navigationState.selectedDomain.description}
+              </Paragraph>
+            )}
+          </div>
+
+          <Row gutter={[24, 24]}>
+            {navigationState.selectedDomain.subdomains.map((subdomain) => {
+              const transactionalCount = subdomain.pages.filter(p => p.type === 'transactional').length;
+              const referenceCount = subdomain.pages.filter(p => p.type === 'reference').length;
+
+              return (
+                <Col xs={24} sm={12} key={subdomain.id}>
+                  <Card
+                    hoverable
+                    onClick={() => handleSubdomainSelect(subdomain)}
+                    className="h-full transition-all hover:shadow-lg"
+                  >
+                    <Space direction="vertical" className="w-full">
+                      <Space>
+                        <span style={{ fontSize: 20 }}>
+                          {getIcon(subdomain.icon)}
+                        </span>
+                        <Title level={4} className="mb-0">{subdomain.name}</Title>
+                      </Space>
+
+                      {subdomain.description && (
+                        <Paragraph className="text-gray-600">
+                          {subdomain.description}
+                        </Paragraph>
+                      )}
+
+                      <Space className="mt-2">
+                        <Text type="secondary">{subdomain.pages.length} pages</Text>
+                        {transactionalCount > 0 && (
+                          <Tag color="green">{transactionalCount} transactional</Tag>
+                        )}
+                        {referenceCount > 0 && (
+                          <Tag color="blue">{referenceCount} reference</Tag>
+                        )}
+                      </Space>
+                    </Space>
+                  </Card>
+                </Col>
+              );
+            })}
+          </Row>
+        </Content>
+      </Layout>
+    );
+  }
+
+  // Show pages
   return (
-    <Sonner
-      theme={theme as ToasterProps["theme"]}
-      className="toaster group"
-      {...props}
-    />
+    <Layout className="min-h-screen bg-gray-50">
+      <Content className="p-6">
+        {renderBreadcrumb()}
+
+        <Button
+          icon={<ArrowLeftOutlined />}
+          onClick={handleBack}
+          className="mb-6"
+        >
+          Back to Subdomains
+        </Button>
+
+        <div className="mb-6">
+          <Space>
+            <span style={{ fontSize: 24 }}>
+              {getIcon(navigationState.selectedSubdomain.icon)}
+            </span>
+            <Title level={2} className="mb-0">{navigationState.selectedSubdomain.name}</Title>
+          </Space>
+          {navigationState.selectedSubdomain.description && (
+            <Paragraph className="text-gray-600 mt-2">
+              {navigationState.selectedSubdomain.description}
+            </Paragraph>
+          )}
+        </div>
+
+        <Row gutter={[24, 24]}>
+          {navigationState.selectedSubdomain.pages.map((page) => (
+            <Col xs={24} sm={12} lg={8} key={page.id}>
+              <Card
+                hoverable
+                onClick={() => handlePageSelect(page)}
+                className="h-full transition-all hover:shadow-lg"
+              >
+                <Space direction="vertical" className="w-full">
+                  <Space className="w-full justify-between">
+                    <Space>
+                      {getIcon(page.icon)}
+                      <Title level={5} className="mb-0">{page.name}</Title>
+                    </Space>
+                    <Tag color={page.type === 'transactional' ? 'green' : 'blue'}>
+                      {page.type}
+                    </Tag>
+                  </Space>
+
+                  {page.description && (
+                    <Paragraph className="text-gray-600 mb-0">
+                      {page.description}
+                    </Paragraph>
+                  )}
+                </Space>
+              </Card>
+            </Col>
+          ))}
+        </Row>
+      </Content>
+    </Layout>
+  );
+}
+
+
+###config app-config.ts
+import React from 'react';
+import { Building, Users, FolderOpen, CheckSquare } from 'lucide-react';
+
+// ============================================================================
+// TYPE DEFINITIONS
+// ============================================================================
+
+export type PageType = 'reference' | 'transactional';
+export type FieldType = 'text' | 'email' | 'number' | 'date' | 'textarea' | 'select' | 'multiselect' | 'boolean' | 'phone' | 'url';
+
+export interface BaseEntity {
+  id: string;
+  businessKey: string;
+  createdAt: string;
+  updatedAt: string;
+  [key: string]: any;
+}
+
+export interface DataStore {
+  [tableName: string]: BaseEntity[];
+}
+
+export interface FieldConfig {
+  name: string;
+  label: string;
+  type: FieldType;
+  required?: boolean;
+  placeholder?: string;
+  options?: { value: string; label: string }[];
+  dependsOn?: string;
+  validation?: {
+    min?: number;
+    max?: number;
+    pattern?: string;
+    custom?: (value: any) => boolean | string;
+  };
+  display?: {
+    showInTable?: boolean;
+    tableOrder?: number;
+    groupWith?: string;
+  };
+}
+
+export interface TableConfig {
+  id: string;
+  name: string;
+  icon: React.ReactNode;
+  businessKeyPrefix: string;
+  dependencies: string[];
+  fields: FieldConfig[];
+  display?: {
+    defaultView?: 'table' | 'cards' | 'list';
+    allowExport?: boolean;
+    showBusinessKey?: boolean;
+    pageSize?: number;
+  };
+}
+
+export interface Page {
+  id: string;
+  name: string;
+  description?: string;
+  type: PageType;
+  component: string;
+  icon?: string;
+  tableConfigs?: TableConfig[];  // Changed to support multiple tables
+}
+
+export interface Subdomain {
+  id: string;
+  name: string;
+  description?: string;
+  icon?: string;
+  pages: Page[];
+}
+
+export interface Domain {
+  id: string;
+  name: string;
+  description?: string;
+  icon?: string;
+  color?: string;
+  subdomains: Subdomain[];
+}
+
+export interface AppConfig {
+  domains: Domain[];
+}
+
+export interface NavigationState {
+  selectedDomain?: Domain;
+  selectedSubdomain?: Subdomain;
+  selectedPage?: Page;
+}
+
+// ============================================================================
+// TABLE CONFIGURATIONS WITH INITIAL DATA
+// ============================================================================
+
+const companiesTableConfig: TableConfig = {
+  id: 'companies',
+  name: 'Companies',
+  icon: <Building size={18} />,
+  businessKeyPrefix: 'COMP',
+  dependencies: [],
+  fields: [
+    {
+      name: 'name',
+      label: 'Company Name',
+      type: 'text',
+      required: true,
+      placeholder: 'Enter company name',
+      display: { showInTable: true, tableOrder: 1 }
+    },
+    {
+      name: 'industry',
+      label: 'Industry',
+      type: 'select',
+      placeholder: 'Select industry',
+      options: [
+        { value: 'Technology', label: 'Technology' },
+        { value: 'Healthcare', label: 'Healthcare' },
+        { value: 'Finance', label: 'Finance' },
+        { value: 'Energy', label: 'Energy' },
+        { value: 'Manufacturing', label: 'Manufacturing' },
+        { value: 'Retail', label: 'Retail' },
+        { value: 'Education', label: 'Education' },
+        { value: 'Other', label: 'Other' }
+      ],
+      display: { showInTable: true, tableOrder: 2 }
+    },
+    {
+      name: 'website',
+      label: 'Website',
+      type: 'url',
+      placeholder: 'https://example.com',
+      display: { showInTable: true, tableOrder: 3 }
+    },
+    {
+      name: 'address',
+      label: 'Address',
+      type: 'textarea',
+      placeholder: 'Enter company address',
+      display: { showInTable: false }
+    },
+    {
+      name: 'phone',
+      label: 'Phone',
+      type: 'phone',
+      placeholder: '+1 (555) 000-0000',
+      display: { showInTable: true, tableOrder: 4 }
+    },
+    {
+      name: 'email',
+      label: 'Email',
+      type: 'email',
+      placeholder: 'contact@company.com',
+      display: { showInTable: true, tableOrder: 5 }
+    },
+    {
+      name: 'founded',
+      label: 'Founded Year',
+      type: 'number',
+      placeholder: '2000',
+      validation: {
+        min: 1800,
+        max: new Date().getFullYear()
+      },
+      display: { showInTable: false }
+    },
+    {
+      name: 'active',
+      label: 'Active',
+      type: 'boolean',
+      display: { showInTable: true, tableOrder: 6 }
+    }
+  ],
+  display: {
+    defaultView: 'table',
+    allowExport: true,
+    showBusinessKey: true,
+    pageSize: 10
+  }
+};
+
+const departmentsTableConfig: TableConfig = {
+  id: 'departments',
+  name: 'Departments',
+  icon: <FolderOpen size={18} />,
+  businessKeyPrefix: 'DEPT',
+  dependencies: ['companies'],
+  fields: [
+    {
+      name: 'name',
+      label: 'Department Name',
+      type: 'text',
+      required: true,
+      placeholder: 'Enter department name',
+      display: { showInTable: true, tableOrder: 1 }
+    },
+    {
+      name: 'companyId',
+      label: 'Company',
+      type: 'select',
+      required: true,
+      dependsOn: 'companies',
+      placeholder: 'Select company',
+      display: { showInTable: true, tableOrder: 2 }
+    },
+    {
+      name: 'manager',
+      label: 'Manager Name',
+      type: 'text',
+      placeholder: 'Enter manager name',
+      display: { showInTable: true, tableOrder: 3 }
+    },
+    {
+      name: 'budget',
+      label: 'Budget',
+      type: 'number',
+      placeholder: '0',
+      validation: { min: 0 },
+      display: { showInTable: true, tableOrder: 4 }
+    },
+    {
+      name: 'headcount',
+      label: 'Headcount',
+      type: 'number',
+      placeholder: '0',
+      validation: { min: 0 },
+      display: { showInTable: true, tableOrder: 5 }
+    },
+    {
+      name: 'location',
+      label: 'Location',
+      type: 'text',
+      placeholder: 'Enter location',
+      display: { showInTable: false }
+    },
+    {
+      name: 'costCenter',
+      label: 'Cost Center',
+      type: 'text',
+      placeholder: 'Enter cost center code',
+      display: { showInTable: false }
+    }
+  ],
+  display: {
+    defaultView: 'table',
+    allowExport: true,
+    showBusinessKey: true,
+    pageSize: 10
+  }
+};
+
+const employeesTableConfig: TableConfig = {
+  id: 'employees',
+  name: 'Employees',
+  icon: <Users size={18} />,
+  businessKeyPrefix: 'EMP',
+  dependencies: ['companies', 'departments'],
+  fields: [
+    {
+      name: 'firstName',
+      label: 'First Name',
+      type: 'text',
+      required: true,
+      placeholder: 'Enter first name',
+      display: { showInTable: true, tableOrder: 1 }
+    },
+    {
+      name: 'lastName',
+      label: 'Last Name',
+      type: 'text',
+      required: true,
+      placeholder: 'Enter last name',
+      display: { showInTable: true, tableOrder: 2 }
+    },
+    {
+      name: 'email',
+      label: 'Email',
+      type: 'email',
+      required: true,
+      placeholder: 'employee@company.com',
+      display: { showInTable: true, tableOrder: 3 }
+    },
+    {
+      name: 'companyId',
+      label: 'Company',
+      type: 'select',
+      required: true,
+      dependsOn: 'companies',
+      placeholder: 'Select company',
+      display: { showInTable: true, tableOrder: 4 }
+    },
+    {
+      name: 'departmentId',
+      label: 'Department',
+      type: 'select',
+      required: true,
+      dependsOn: 'departments',
+      placeholder: 'Select department',
+      display: { showInTable: true, tableOrder: 5 }
+    },
+    {
+      name: 'position',
+      label: 'Position',
+      type: 'text',
+      placeholder: 'Enter job title',
+      display: { showInTable: true, tableOrder: 6 }
+    },
+    {
+      name: 'employmentType',
+      label: 'Employment Type',
+      type: 'select',
+      options: [
+        { value: 'Full-time', label: 'Full-time' },
+        { value: 'Part-time', label: 'Part-time' },
+        { value: 'Contract', label: 'Contract' },
+        { value: 'Intern', label: 'Intern' }
+      ],
+      placeholder: 'Select employment type',
+      display: { showInTable: false }
+    },
+    {
+      name: 'startDate',
+      label: 'Start Date',
+      type: 'date',
+      display: { showInTable: false }
+    },
+    {
+      name: 'phone',
+      label: 'Phone',
+      type: 'phone',
+      placeholder: '+1 (555) 000-0000',
+      display: { showInTable: false }
+    },
+    {
+      name: 'active',
+      label: 'Active',
+      type: 'boolean',
+      display: { showInTable: true, tableOrder: 7 }
+    }
+  ],
+  display: {
+    defaultView: 'table',
+    allowExport: true,
+    showBusinessKey: true,
+    pageSize: 10
+  }
+};
+
+const projectsTableConfig: TableConfig = {
+  id: 'projects',
+  name: 'Projects',
+  icon: <FolderOpen size={18} />,
+  businessKeyPrefix: 'PROJ',
+  dependencies: ['departments'],
+  fields: [
+    {
+      name: 'name',
+      label: 'Project Name',
+      type: 'text',
+      required: true,
+      placeholder: 'Enter project name',
+      display: { showInTable: true, tableOrder: 1 }
+    },
+    {
+      name: 'departmentId',
+      label: 'Department',
+      type: 'select',
+      required: true,
+      dependsOn: 'departments',
+      placeholder: 'Select department',
+      display: { showInTable: true, tableOrder: 2 }
+    },
+    {
+      name: 'status',
+      label: 'Status',
+      type: 'select',
+      options: [
+        { value: 'Planning', label: 'Planning' },
+        { value: 'In Progress', label: 'In Progress' },
+        { value: 'On Hold', label: 'On Hold' },
+        { value: 'Completed', label: 'Completed' },
+        { value: 'Cancelled', label: 'Cancelled' }
+      ],
+      placeholder: 'Select status',
+      display: { showInTable: true, tableOrder: 3 }
+    },
+    {
+      name: 'priority',
+      label: 'Priority',
+      type: 'select',
+      options: [
+        { value: 'Low', label: 'Low' },
+        { value: 'Medium', label: 'Medium' },
+        { value: 'High', label: 'High' },
+        { value: 'Critical', label: 'Critical' }
+      ],
+      placeholder: 'Select priority',
+      display: { showInTable: true, tableOrder: 4 }
+    },
+    {
+      name: 'startDate',
+      label: 'Start Date',
+      type: 'date',
+      display: { showInTable: true, tableOrder: 5 }
+    },
+    {
+      name: 'endDate',
+      label: 'End Date',
+      type: 'date',
+      display: { showInTable: true, tableOrder: 6 }
+    },
+    {
+      name: 'budget',
+      label: 'Budget',
+      type: 'number',
+      placeholder: '0',
+      validation: { min: 0 },
+      display: { showInTable: false }
+    },
+    {
+      name: 'description',
+      label: 'Description',
+      type: 'textarea',
+      placeholder: 'Enter project description',
+      display: { showInTable: false }
+    }
+  ],
+  display: {
+    defaultView: 'table',
+    allowExport: true,
+    showBusinessKey: true,
+    pageSize: 10
+  }
+};
+
+const tasksTableConfig: TableConfig = {
+  id: 'tasks',
+  name: 'Tasks',
+  icon: <CheckSquare size={18} />,
+  businessKeyPrefix: 'TASK',
+  dependencies: ['projects', 'employees'],
+  fields: [
+    {
+      name: 'title',
+      label: 'Task Title',
+      type: 'text',
+      required: true,
+      placeholder: 'Enter task title',
+      display: { showInTable: true, tableOrder: 1 }
+    },
+    {
+      name: 'projectId',
+      label: 'Project',
+      type: 'select',
+      required: true,
+      dependsOn: 'projects',
+      placeholder: 'Select project',
+      display: { showInTable: true, tableOrder: 2 }
+    },
+    {
+      name: 'assignedTo',
+      label: 'Assigned To',
+      type: 'select',
+      dependsOn: 'employees',
+      placeholder: 'Select employee',
+      display: { showInTable: true, tableOrder: 3 }
+    },
+    {
+      name: 'status',
+      label: 'Status',
+      type: 'select',
+      options: [
+        { value: 'To Do', label: 'To Do' },
+        { value: 'In Progress', label: 'In Progress' },
+        { value: 'Review', label: 'Review' },
+        { value: 'Done', label: 'Done' },
+        { value: 'Blocked', label: 'Blocked' }
+      ],
+      placeholder: 'Select status',
+      display: { showInTable: true, tableOrder: 4 }
+    },
+    {
+      name: 'priority',
+      label: 'Priority',
+      type: 'select',
+      options: [
+        { value: 'Low', label: 'Low' },
+        { value: 'Medium', label: 'Medium' },
+        { value: 'High', label: 'High' },
+        { value: 'Critical', label: 'Critical' }
+      ],
+      placeholder: 'Select priority',
+      display: { showInTable: true, tableOrder: 5 }
+    },
+    {
+      name: 'dueDate',
+      label: 'Due Date',
+      type: 'date',
+      display: { showInTable: true, tableOrder: 6 }
+    },
+    {
+      name: 'estimatedHours',
+      label: 'Estimated Hours',
+      type: 'number',
+      placeholder: '0',
+      validation: { min: 0 },
+      display: { showInTable: false }
+    },
+    {
+      name: 'description',
+      label: 'Description',
+      type: 'textarea',
+      placeholder: 'Enter task description',
+      display: { showInTable: false }
+    },
+    {
+      name: 'completed',
+      label: 'Completed',
+      type: 'boolean',
+      display: { showInTable: true, tableOrder: 7 }
+    }
+  ],
+  display: {
+    defaultView: 'table',
+    allowExport: true,
+    showBusinessKey: true,
+    pageSize: 10
+  }
+};
+
+// ============================================================================
+// UNIFIED APPLICATION CONFIGURATION
+// ============================================================================
+
+export const appConfig: AppConfig = {
+  domains: [
+    {
+      id: 'business-management',
+      name: 'Business Management',
+      description: 'Core business operations and data management',
+      icon: 'BankOutlined',
+      color: '#1890ff',
+      subdomains: [
+        {
+          id: 'master-data',
+          name: 'Master Data Management',
+          description: 'Centralized data management across all entities',
+          icon: 'DatabaseOutlined',
+          pages: [
+            {
+              id: 'all-master-data',
+              name: 'All Master Data',
+              description: 'Manage all business entities in one place',
+              type: 'transactional',
+              component: 'EnhancedDataEntrySystem',
+              icon: 'TableOutlined',
+              tableConfigs: [
+                companiesTableConfig,
+                departmentsTableConfig,
+                employeesTableConfig,
+                projectsTableConfig,
+                tasksTableConfig
+              ]
+            }
+          ]
+        },
+        {
+          id: 'organizational-data',
+          name: 'Organizational Data',
+          description: 'Company structure and employee information',
+          icon: 'TeamOutlined',
+          pages: [
+            {
+              id: 'company-management',
+              name: 'Company Management',
+              description: 'Manage company information and corporate structure',
+              type: 'transactional',
+              component: 'EnhancedDataEntrySystem',
+              icon: 'BankOutlined',
+              tableConfigs: [companiesTableConfig]
+            },
+            {
+              id: 'department-management',
+              name: 'Department Management',
+              description: 'Manage organizational departments',
+              type: 'transactional',
+              component: 'EnhancedDataEntrySystem',
+              icon: 'ApartmentOutlined',
+              tableConfigs: [departmentsTableConfig]
+            },
+            {
+              id: 'employee-directory',
+              name: 'Employee Directory',
+              description: 'Manage employee information',
+              type: 'transactional',
+              component: 'EnhancedDataEntrySystem',
+              icon: 'UserOutlined',
+              tableConfigs: [employeesTableConfig]
+            },
+            {
+              id: 'complete-organization',
+              name: 'Complete Organization',
+              description: 'Manage all organizational data in one place',
+              type: 'transactional',
+              component: 'EnhancedDataEntrySystem',
+              icon: 'GlobalOutlined',
+              tableConfigs: [companiesTableConfig, departmentsTableConfig, employeesTableConfig]
+            }
+          ]
+        },
+        {
+          id: 'project-management',
+          name: 'Project Management',
+          description: 'Project planning and task coordination',
+          icon: 'ProjectOutlined',
+          pages: [
+            {
+              id: 'project-planning',
+              name: 'Project Planning',
+              description: 'Create and manage projects',
+              type: 'transactional',
+              component: 'EnhancedDataEntrySystem',
+              icon: 'CalendarOutlined',
+              tableConfigs: [projectsTableConfig]
+            },
+            {
+              id: 'task-management',
+              name: 'Task Management',
+              description: 'Assign and track project tasks',
+              type: 'transactional',
+              component: 'EnhancedDataEntrySystem',
+              icon: 'CheckSquareOutlined',
+              tableConfigs: [tasksTableConfig]
+            },
+            {
+              id: 'project-task-overview',
+              name: 'Projects & Tasks',
+              description: 'Complete project and task management view',
+              type: 'transactional',
+              component: 'EnhancedDataEntrySystem',
+              icon: 'FundProjectionScreenOutlined',
+              tableConfigs: [projectsTableConfig, tasksTableConfig]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      id: 'analytics-reporting',
+      name: 'Analytics & Reporting',
+      description: 'Business intelligence and analytics',
+      icon: 'BarChartOutlined',
+      color: '#fa541c',
+      subdomains: [
+        {
+          id: 'business-analytics',
+          name: 'Business Analytics',
+          description: 'Analyze business performance',
+          icon: 'LineChartOutlined',
+          pages: [
+            {
+              id: 'company-overview',
+              name: 'Company Overview',
+              description: 'View company statistics and trends',
+              type: 'reference',
+              component: 'CompanyDashboard',
+              icon: 'DashboardOutlined'
+            },
+            {
+              id: 'project-analytics',
+              name: 'Project Analytics',
+              description: 'Project performance metrics',
+              type: 'reference',
+              component: 'ProjectDashboard',
+              icon: 'FundOutlined'
+            }
+          ]
+        }
+      ]
+    }
+  ]
+};
+
+// ============================================================================
+// DEFAULT INITIAL DATA
+// ============================================================================
+
+export const defaultInitialData: DataStore = {
+  companies: [
+    {
+      id: 'comp_1',
+      businessKey: 'COMP-0001',
+      name: 'Tech Solutions Inc',
+      industry: 'Technology',
+      website: 'https://techsolutions.com',
+      address: '123 Tech Street, Silicon Valley, CA 94025',
+      phone: '+1 (555) 123-4567',
+      email: 'contact@techsolutions.com',
+      founded: 2010,
+      active: true,
+      createdAt: new Date('2024-01-01').toISOString(),
+      updatedAt: new Date('2024-01-01').toISOString()
+    },
+    {
+      id: 'comp_2',
+      businessKey: 'COMP-0002',
+      name: 'Global Enterprises',
+      industry: 'Finance',
+      website: 'https://globalenterprises.com',
+      address: '456 Business Ave, New York, NY 10001',
+      phone: '+1 (555) 987-6543',
+      email: 'info@globalenterprises.com',
+      founded: 2005,
+      active: true,
+      createdAt: new Date('2024-01-02').toISOString(),
+      updatedAt: new Date('2024-01-02').toISOString()
+    }
+  ],
+  departments: [
+    {
+      id: 'dept_1',
+      businessKey: 'DEPT-0001',
+      name: 'Engineering',
+      companyId: 'comp_1',
+      manager: 'John Smith',
+      budget: 500000,
+      headcount: 25,
+      location: 'Building A',
+      costCenter: 'CC-100',
+      createdAt: new Date('2024-01-03').toISOString(),
+      updatedAt: new Date('2024-01-03').toISOString()
+    },
+    {
+      id: 'dept_2',
+      businessKey: 'DEPT-0002',
+      name: 'Marketing',
+      companyId: 'comp_1',
+      manager: 'Jane Doe',
+      budget: 200000,
+      headcount: 10,
+      location: 'Building B',
+      costCenter: 'CC-200',
+      createdAt: new Date('2024-01-03').toISOString(),
+      updatedAt: new Date('2024-01-03').toISOString()
+    }
+  ],
+  employees: [
+    {
+      id: 'emp_1',
+      businessKey: 'EMP-0001',
+      firstName: 'Alice',
+      lastName: 'Johnson',
+      email: 'alice.johnson@techsolutions.com',
+      companyId: 'comp_1',
+      departmentId: 'dept_1',
+      position: 'Senior Developer',
+      employmentType: 'Full-time',
+      startDate: '2022-03-15',
+      phone: '+1 (555) 111-2222',
+      active: true,
+      createdAt: new Date('2024-01-04').toISOString(),
+      updatedAt: new Date('2024-01-04').toISOString()
+    },
+    {
+      id: 'emp_2',
+      businessKey: 'EMP-0002',
+      firstName: 'Bob',
+      lastName: 'Wilson',
+      email: 'bob.wilson@techsolutions.com',
+      companyId: 'comp_1',
+      departmentId: 'dept_2',
+      position: 'Marketing Manager',
+      employmentType: 'Full-time',
+      startDate: '2021-06-01',
+      phone: '+1 (555) 333-4444',
+      active: true,
+      createdAt: new Date('2024-01-04').toISOString(),
+      updatedAt: new Date('2024-01-04').toISOString()
+    }
+  ],
+  projects: [
+    {
+      id: 'proj_1',
+      businessKey: 'PROJ-0001',
+      name: 'Website Redesign',
+      departmentId: 'dept_2',
+      status: 'In Progress',
+      priority: 'High',
+      startDate: '2024-01-15',
+      endDate: '2024-06-30',
+      budget: 50000,
+      description: 'Complete redesign of company website',
+      createdAt: new Date('2024-01-15').toISOString(),
+      updatedAt: new Date('2024-01-15').toISOString()
+    }
+  ],
+  tasks: [
+    {
+      id: 'task_1',
+      businessKey: 'TASK-0001',
+      title: 'Design new homepage',
+      projectId: 'proj_1',
+      assignedTo: 'emp_2',
+      status: 'In Progress',
+      priority: 'High',
+      dueDate: '2024-02-15',
+      estimatedHours: 40,
+      description: 'Create mockups for the new homepage design',
+      completed: false,
+      createdAt: new Date('2024-01-20').toISOString(),
+      updatedAt: new Date('2024-01-20').toISOString()
+    }
+  ]
+};
+
+// ============================================================================
+// UTILITY FUNCTIONS
+// ============================================================================
+
+export const getAllPages = (): Page[] => {
+  return appConfig.domains.flatMap(domain =>
+    domain.subdomains.flatMap(subdomain => subdomain.pages)
   );
 };
 
-export { Toaster };
+export const getAllTableConfigs = (): TableConfig[] => {
+  const configs: TableConfig[] = [];
+  getAllPages().forEach(page => {
+    if (page.tableConfigs) {
+      configs.push(...page.tableConfigs);
+    }
+  });
+  // Remove duplicates based on table id
+  return configs.filter((config, index, self) =>
+    index === self.findIndex(c => c.id === config.id)
+  );
+};
+
+export const getTableConfigById = (tableId: string): TableConfig | undefined => {
+  return getAllTableConfigs().find(config => config.id === tableId);
+};
+
+export const getPagesByType = (type: PageType): Page[] => {
+  return getAllPages().filter(page => page.type === type);
+};
+
+export const findPageById = (pageId: string): Page | undefined => {
+  return getAllPages().find(page => page.id === pageId);
+};
+
+export const buildNavigationPath = (domainId: string, subdomainId?: string, pageId?: string) => {
+  const domain = appConfig.domains.find(d => d.id === domainId);
+  if (!domain) return null;
+
+  if (!subdomainId) return { domain };
+
+  const subdomain = domain.subdomains.find(s => s.id === subdomainId);
+  if (!subdomain) return { domain };
+
+  if (!pageId) return { domain, subdomain };
+
+  const page = subdomain.pages.find(p => p.id === pageId);
+  if (!page) return { domain, subdomain };
+
+  return { domain, subdomain, page };
+};
+
+export const getDomainStats = () => {
+  return appConfig.domains.map(domain => ({
+    domainId: domain.id,
+    domainName: domain.name,
+    subdomainCount: domain.subdomains.length,
+    totalPages: domain.subdomains.reduce((total, sub) => total + sub.pages.length, 0),
+    transactionalPages: domain.subdomains.reduce(
+      (total, sub) => total + sub.pages.filter(p => p.type === 'transactional').length, 0
+    ),
+    referencePages: domain.subdomains.reduce(
+      (total, sub) => total + sub.pages.filter(p => p.type === 'reference').length, 0
+    )
+  }));
+};
+
+
+####EnhancedDataEntrySystem.tsx
 import React, { useState, useEffect } from 'react';
 import {
   Button,
@@ -54,20 +1334,7 @@ import {
 } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { toast } from 'sonner';
-import { Building, Users, FolderOpen, CheckSquare } from 'lucide-react';
-
-// Generic Data Types
-export interface BaseEntity {
-  id: string;
-  businessKey: string;
-  createdAt: string;
-  updatedAt: string;
-  [key: string]: any; // Allow additional properties
-}
-
-export interface DataStore {
-  [tableName: string]: BaseEntity[];
-}
+import { getAllTableConfigs, defaultInitialData, BaseEntity, DataStore, FieldConfig, TableConfig } from '../config/app-config';
 
 // Filter Types
 interface FilterCondition {
@@ -86,43 +1353,7 @@ interface Filters {
   [key: string]: FilterCondition[];
 }
 
-// Field Configuration
-export interface FieldConfig {
-  name: string;
-  label: string;
-  type: 'text' | 'email' | 'number' | 'date' | 'textarea' | 'select' | 'multiselect' | 'boolean' | 'phone' | 'url';
-  required?: boolean;
-  placeholder?: string;
-  options?: { value: string; label: string }[];
-  dependsOn?: string; // Table name this field depends on
-  validation?: {
-    min?: number;
-    max?: number;
-    pattern?: string;
-    custom?: (value: any) => boolean | string;
-  };
-  display?: {
-    showInTable?: boolean;
-    tableOrder?: number;
-    groupWith?: string;
-  };
-}
-
-// Table Configuration
-export interface TableConfig {
-  id: string;
-  name: string;
-  icon: React.ReactNode;
-  businessKeyPrefix: string;
-  dependencies: string[]; // Other table IDs this depends on
-  fields: FieldConfig[];
-  display?: {
-    defaultSort?: string;
-    pageSize?: number;
-    allowDuplicate?: boolean;
-    allowDelete?: boolean;
-  };
-}
+// Types are now imported from app-config
 
 // Component Props Interface
 export interface EnhancedDataEntrySystemProps {
@@ -135,482 +1366,11 @@ export interface EnhancedDataEntrySystemProps {
   };
 }
 
-// Default configurations for the business example
-const defaultTableConfigs: TableConfig[] = [
-  {
-    id: 'companies',
-    name: 'Companies',
-    icon: <Building size={18} />,
-    businessKeyPrefix: 'COMP',
-    dependencies: [],
-    fields: [
-      { 
-        name: 'name', 
-        label: 'Company Name', 
-        type: 'text', 
-        required: true, 
-        placeholder: 'Enter company name',
-        display: { showInTable: true, tableOrder: 1 }
-      },
-      { 
-        name: 'industry', 
-        label: 'Industry', 
-        type: 'select', 
-        placeholder: 'Select industry',
-        options: [
-          { value: 'Technology', label: 'Technology' },
-          { value: 'Healthcare', label: 'Healthcare' },
-          { value: 'Finance', label: 'Finance' },
-          { value: 'Energy', label: 'Energy' },
-          { value: 'Manufacturing', label: 'Manufacturing' },
-          { value: 'Retail', label: 'Retail' },
-          { value: 'Education', label: 'Education' },
-          { value: 'Other', label: 'Other' }
-        ],
-        display: { showInTable: true, tableOrder: 2 }
-      },
-      { 
-        name: 'website', 
-        label: 'Website', 
-        type: 'url', 
-        placeholder: 'https://example.com',
-        display: { showInTable: true, tableOrder: 3 }
-      },
-      { 
-        name: 'address', 
-        label: 'Address', 
-        type: 'textarea', 
-        placeholder: 'Enter company address',
-        display: { showInTable: false }
-      },
-      { 
-        name: 'phone', 
-        label: 'Phone', 
-        type: 'phone', 
-        placeholder: '+1 (555) 123-4567',
-        display: { showInTable: false }
-      },
-      { 
-        name: 'employeeCount', 
-        label: 'Employee Count', 
-        type: 'number', 
-        placeholder: 'Number of employees',
-        validation: { min: 1 },
-        display: { showInTable: true, tableOrder: 4 }
-      }
-    ]
-  },
-  {
-    id: 'departments',
-    name: 'Departments',
-    icon: <Users size={18} />,
-    businessKeyPrefix: 'DEPT',
-    dependencies: ['companies'],
-    fields: [
-      { name: 'companyId', label: 'Company', type: 'select', required: true, dependsOn: 'companies' },
-      { 
-        name: 'name', 
-        label: 'Department Name', 
-        type: 'text', 
-        required: true, 
-        placeholder: 'Enter department name',
-        display: { showInTable: true, tableOrder: 1 }
-      },
-      { 
-        name: 'budget', 
-        label: 'Budget', 
-        type: 'number', 
-        placeholder: 'Enter budget',
-        validation: { min: 0 },
-        display: { showInTable: true, tableOrder: 2 }
-      },
-      { 
-        name: 'description', 
-        label: 'Description', 
-        type: 'textarea', 
-        placeholder: 'Enter description',
-        display: { showInTable: false }
-      },
-      { 
-        name: 'isActive', 
-        label: 'Active', 
-        type: 'boolean',
-        display: { showInTable: true, tableOrder: 3 }
-      }
-    ]
-  },
-  {
-    id: 'employees',
-    name: 'Employees',
-    icon: <Users size={18} />,
-    businessKeyPrefix: 'EMP',
-    dependencies: ['companies'],
-    fields: [
-      { name: 'companyId', label: 'Company', type: 'select', required: true, dependsOn: 'companies' },
-      { name: 'departmentId', label: 'Department (Optional)', type: 'select', dependsOn: 'departments' },
-      { 
-        name: 'firstName', 
-        label: 'First Name', 
-        type: 'text', 
-        required: true, 
-        placeholder: 'Enter first name',
-        display: { showInTable: true, tableOrder: 1 }
-      },
-      { 
-        name: 'lastName', 
-        label: 'Last Name', 
-        type: 'text', 
-        required: true, 
-        placeholder: 'Enter last name',
-        display: { showInTable: true, tableOrder: 2 }
-      },
-      { 
-        name: 'email', 
-        label: 'Email', 
-        type: 'email', 
-        required: true, 
-        placeholder: 'Enter email',
-        display: { showInTable: true, tableOrder: 3 }
-      },
-      { 
-        name: 'position', 
-        label: 'Position', 
-        type: 'text', 
-        placeholder: 'Enter position',
-        display: { showInTable: true, tableOrder: 4 }
-      },
-      { 
-        name: 'salary', 
-        label: 'Salary', 
-        type: 'number', 
-        placeholder: 'Enter salary',
-        validation: { min: 0 },
-        display: { showInTable: false }
-      },
-      { 
-        name: 'phone', 
-        label: 'Phone', 
-        type: 'phone', 
-        placeholder: '+1 (555) 123-4567',
-        display: { showInTable: false }
-      },
-      { 
-        name: 'startDate', 
-        label: 'Start Date', 
-        type: 'date',
-        display: { showInTable: false }
-      }
-    ]
-  },
-  {
-    id: 'projects',
-    name: 'Projects',
-    icon: <FolderOpen size={18} />,
-    businessKeyPrefix: 'PROJ',
-    dependencies: ['companies'],
-    fields: [
-      { name: 'companyId', label: 'Company', type: 'select', required: true, dependsOn: 'companies' },
-      { 
-        name: 'name', 
-        label: 'Project Name', 
-        type: 'text', 
-        required: true, 
-        placeholder: 'Enter project name',
-        display: { showInTable: true, tableOrder: 1 }
-      },
-      { 
-        name: 'startDate', 
-        label: 'Start Date', 
-        type: 'date', 
-        required: true,
-        display: { showInTable: true, tableOrder: 2 }
-      },
-      { 
-        name: 'endDate', 
-        label: 'End Date', 
-        type: 'date',
-        display: { showInTable: true, tableOrder: 3 }
-      },
-      { 
-        name: 'status', 
-        label: 'Status', 
-        type: 'select', 
-        options: [
-          { value: 'Planning', label: 'Planning' },
-          { value: 'In Progress', label: 'In Progress' },
-          { value: 'Completed', label: 'Completed' },
-          { value: 'On Hold', label: 'On Hold' },
-          { value: 'Cancelled', label: 'Cancelled' }
-        ],
-        display: { showInTable: true, tableOrder: 4 }
-      },
-      { name: 'assignedEmployees', label: 'Assigned Employees', type: 'multiselect', dependsOn: 'employees' },
-      { 
-        name: 'description', 
-        label: 'Description', 
-        type: 'textarea', 
-        placeholder: 'Enter project description',
-        display: { showInTable: false }
-      },
-      { 
-        name: 'budget', 
-        label: 'Budget', 
-        type: 'number', 
-        placeholder: 'Enter budget',
-        validation: { min: 0 },
-        display: { showInTable: false }
-      }
-    ]
-  },
-  {
-    id: 'tasks',
-    name: 'Tasks',
-    icon: <CheckSquare size={18} />,
-    businessKeyPrefix: 'TASK',
-    dependencies: ['projects'],
-    fields: [
-      { name: 'projectId', label: 'Project', type: 'select', required: true, dependsOn: 'projects' },
-      { name: 'assignedEmployeeId', label: 'Assigned Employee', type: 'select', dependsOn: 'employees' },
-      { 
-        name: 'title', 
-        label: 'Task Title', 
-        type: 'text', 
-        required: true, 
-        placeholder: 'Enter task title',
-        display: { showInTable: true, tableOrder: 1 }
-      },
-      { 
-        name: 'description', 
-        label: 'Description', 
-        type: 'textarea', 
-        placeholder: 'Enter task description',
-        display: { showInTable: false }
-      },
-      { 
-        name: 'priority', 
-        label: 'Priority', 
-        type: 'select', 
-        options: [
-          { value: 'Low', label: 'Low' },
-          { value: 'Medium', label: 'Medium' },
-          { value: 'High', label: 'High' },
-          { value: 'Critical', label: 'Critical' }
-        ],
-        display: { showInTable: true, tableOrder: 2 }
-      },
-      { 
-        name: 'status', 
-        label: 'Status', 
-        type: 'select', 
-        options: [
-          { value: 'Not Started', label: 'Not Started' },
-          { value: 'In Progress', label: 'In Progress' },
-          { value: 'Completed', label: 'Completed' },
-          { value: 'On Hold', label: 'On Hold' }
-        ],
-        display: { showInTable: true, tableOrder: 3 }
-      },
-      { 
-        name: 'dueDate', 
-        label: 'Due Date', 
-        type: 'date',
-        display: { showInTable: true, tableOrder: 4 }
-      },
-      { 
-        name: 'estimatedHours', 
-        label: 'Estimated Hours', 
-        type: 'number', 
-        placeholder: 'Enter estimated hours',
-        validation: { min: 0 },
-        display: { showInTable: false }
-      }
-    ]
-  }
-];
+// Export types that are still used elsewhere
+export type { BaseEntity, DataStore, FieldConfig, TableConfig };
 
-// Default sample data
-const defaultInitialData: DataStore = {
-  companies: [
-    {
-      id: 'comp_1',
-      businessKey: 'COMP-0001',
-      name: 'Tech Solutions Inc',
-      industry: 'Technology',
-      website: 'https://techsolutions.com',
-      address: '123 Innovation Drive, San Francisco, CA',
-      phone: '+1 (555) 123-4567',
-      employeeCount: 150,
-      createdAt: '2024-01-15T10:00:00Z',
-      updatedAt: '2024-01-15T10:00:00Z'
-    },
-    {
-      id: 'comp_2',
-      businessKey: 'COMP-0002',
-      name: 'Green Energy Corp',
-      industry: 'Energy',
-      website: 'https://greenenergy.com',
-      address: '456 Renewable Ave, Austin, TX',
-      phone: '+1 (555) 987-6543',
-      employeeCount: 75,
-      createdAt: '2024-02-01T09:30:00Z',
-      updatedAt: '2024-02-01T09:30:00Z'
-    },
-    {
-      id: 'comp_3',
-      businessKey: 'COMP-0003',
-      name: 'Healthcare Plus',
-      industry: 'Healthcare',
-      website: 'https://healthcareplus.com',
-      address: '789 Medical Center Blvd, Boston, MA',
-      phone: '+1 (555) 456-7890',
-      employeeCount: 200,
-      createdAt: '2024-02-15T14:20:00Z',
-      updatedAt: '2024-02-15T14:20:00Z'
-    }
-  ],
-  departments: [
-    {
-      id: 'dept_1',
-      businessKey: 'DEPT-0001',
-      companyId: 'comp_1',
-      name: 'Engineering',
-      budget: 500000,
-      description: 'Software development and technical operations',
-      isActive: true,
-      createdAt: '2024-01-16T11:00:00Z',
-      updatedAt: '2024-01-16T11:00:00Z'
-    },
-    {
-      id: 'dept_2',
-      businessKey: 'DEPT-0002',
-      companyId: 'comp_1',
-      name: 'Marketing',
-      budget: 200000,
-      description: 'Brand management and customer acquisition',
-      isActive: true,
-      createdAt: '2024-01-17T13:30:00Z',
-      updatedAt: '2024-01-17T13:30:00Z'
-    },
-    {
-      id: 'dept_3',
-      businessKey: 'DEPT-0003',
-      companyId: 'comp_2',
-      name: 'Research & Development',
-      budget: 750000,
-      description: 'Clean energy research and development',
-      isActive: true,
-      createdAt: '2024-02-02T10:15:00Z',
-      updatedAt: '2024-02-02T10:15:00Z'
-    }
-  ],
-  employees: [
-    {
-      id: 'emp_1',
-      businessKey: 'EMP-0001',
-      companyId: 'comp_1',
-      departmentId: 'dept_1',
-      firstName: 'John',
-      lastName: 'Smith',
-      email: 'john.smith@techsolutions.com',
-      position: 'Senior Developer',
-      salary: 95000,
-      phone: '+1 (555) 111-2222',
-      startDate: '2023-03-15',
-      createdAt: '2024-01-18T08:00:00Z',
-      updatedAt: '2024-01-18T08:00:00Z'
-    },
-    {
-      id: 'emp_2',
-      businessKey: 'EMP-0002',
-      companyId: 'comp_1',
-      departmentId: 'dept_2',
-      firstName: 'Sarah',
-      lastName: 'Johnson',
-      email: 'sarah.johnson@techsolutions.com',
-      position: 'Marketing Manager',
-      salary: 78000,
-      phone: '+1 (555) 333-4444',
-      startDate: '2023-06-01',
-      createdAt: '2024-01-19T09:15:00Z',
-      updatedAt: '2024-01-19T09:15:00Z'
-    },
-    {
-      id: 'emp_3',
-      businessKey: 'EMP-0003',
-      companyId: 'comp_2',
-      departmentId: 'dept_3',
-      firstName: 'Michael',
-      lastName: 'Chen',
-      email: 'michael.chen@greenenergy.com',
-      position: 'Research Scientist',
-      salary: 105000,
-      phone: '+1 (555) 555-6666',
-      startDate: '2023-01-10',
-      createdAt: '2024-02-03T07:45:00Z',
-      updatedAt: '2024-02-03T07:45:00Z'
-    }
-  ],
-  projects: [
-    {
-      id: 'proj_1',
-      businessKey: 'PROJ-0001',
-      companyId: 'comp_1',
-      name: 'Mobile App Redesign',
-      startDate: '2024-03-01',
-      endDate: '2024-06-30',
-      status: 'In Progress',
-      description: 'Complete redesign of the mobile application interface',
-      assignedEmployees: ['emp_1'],
-      budget: 150000,
-      createdAt: '2024-02-20T10:30:00Z',
-      updatedAt: '2024-02-20T10:30:00Z'
-    },
-    {
-      id: 'proj_2',
-      businessKey: 'PROJ-0002',
-      companyId: 'comp_2',
-      name: 'Solar Panel Efficiency Study',
-      startDate: '2024-01-15',
-      endDate: '2024-12-31',
-      status: 'In Progress',
-      description: 'Research project to improve solar panel efficiency by 15%',
-      assignedEmployees: ['emp_3'],
-      budget: 500000,
-      createdAt: '2024-02-05T11:00:00Z',
-      updatedAt: '2024-02-05T11:00:00Z'
-    }
-  ],
-  tasks: [
-    {
-      id: 'task_1',
-      businessKey: 'TASK-0001',
-      projectId: 'proj_1',
-      assignedEmployeeId: 'emp_1',
-      title: 'Design new login screen',
-      description: 'Create mockups and implement new login interface',
-      priority: 'High',
-      status: 'In Progress',
-      dueDate: '2024-03-15',
-      estimatedHours: 40,
-      createdAt: '2024-02-21T14:20:00Z',
-      updatedAt: '2024-02-21T14:20:00Z'
-    },
-    {
-      id: 'task_2',
-      businessKey: 'TASK-0002',
-      projectId: 'proj_2',
-      assignedEmployeeId: 'emp_3',
-      title: 'Test new photovoltaic materials',
-      description: 'Laboratory testing of advanced photovoltaic materials',
-      priority: 'Critical',
-      status: 'Not Started',
-      dueDate: '2024-04-01',
-      estimatedHours: 80,
-      createdAt: '2024-02-06T09:30:00Z',
-      updatedAt: '2024-02-06T09:30:00Z'
-    }
-  ]
-};
+// Get default table configs from unified config
+const defaultTableConfigs = getAllTableConfigs();
 
 export function EnhancedDataEntrySystem({
   tableConfigs = defaultTableConfigs,
